@@ -64,7 +64,12 @@ export default function SettingsScreen() {
           />
         </label>
         {error && <p style="color: var(--del-color);">{error}</p>}
-        <button type="submit">Save & Continue</button>
+        <div role="group">
+          <button type="submit">Save & Continue</button>
+          <button type="button" onClick={() => navigate('/chat')}>
+            Back
+          </button>
+        </div>
       </form>
     </main>
   )

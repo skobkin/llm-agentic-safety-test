@@ -22,6 +22,7 @@ export default function ChatScreen() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const [dialog, setDialog] = useState<{ mode: 'export' | 'import'; text: string } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (dialog) {
@@ -43,31 +44,35 @@ export default function ChatScreen() {
   }, [messages])
 
   const sendMessage = async () => {
-    if (!settings) return
+    if (!settings || loading) return
     const userMessage: ChatMessage = { role: 'user', content: input, createdAt: Date.now() }
     await addMessage(userMessage)
     setInput('')
+    setLoading(true)
 
-    const payload = {
+    const activeTools = tools
+      .filter((t) => !t.disabled)
+      .map((t) => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: {
+            type: 'object',
+            properties: Object.fromEntries(t.args.map((a) => [a.name, { type: a.type }])),
+          },
+        },
+      }))
+
+    const payload: Record<string, unknown> = {
       model: settings.model,
       messages: messages
         .filter((m) => m.role !== 'tool' && m.role !== 'error')
         .concat(userMessage)
         .map((m) => ({ role: m.role, content: m.content })),
-      tools: tools
-        .filter((t) => !t.disabled)
-        .map((t) => ({
-          type: 'function',
-          function: {
-            name: t.name,
-            description: t.description,
-            parameters: {
-              type: 'object',
-              properties: Object.fromEntries(t.args.map((a) => [a.name, { type: a.type }])),
-            },
-          },
-        })),
+      tool_choice: activeTools.length > 0 ? 'auto' : 'none',
     }
+    if (activeTools.length > 0) payload.tools = activeTools
 
     try {
       const res = await fetch(`${settings.apiBaseUrl}/chat/completions`, {
@@ -93,7 +98,14 @@ export default function ChatScreen() {
       const toolCalls = data.choices?.[0]?.message?.tool_calls
       if (toolCalls) {
         for (const call of toolCalls) {
-          const args = JSON.parse(call.function.arguments)
+          let args: Record<string, unknown> = {}
+          try {
+            if (call.function.arguments) {
+              args = JSON.parse(call.function.arguments)
+            }
+          } catch {
+            // ignore parse errors
+          }
           const tool = tools.find((t) => t.name === call.function.name)
           await addMessage({
             role: 'tool',
@@ -114,6 +126,8 @@ export default function ChatScreen() {
         content: `❌ API: ${message}`,
         createdAt: Date.now(),
       })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -157,19 +171,22 @@ export default function ChatScreen() {
                 {m.role === 'assistant' && `🤖 ${m.content}`}
                 {m.role === 'error' && m.content}
                 {m.role === 'tool' && (
-                  <em>
-                    🤖👉🔧 {m.toolName} {JSON.stringify(m.args)}{' '}
+                  <>
+                    🤖🔧 <mark>{m.toolName}()</mark> {JSON.stringify(m.args)}{' '}
                     {m.result !== undefined && `=> ${JSON.stringify(m.result)}`}
-                  </em>
+                  </>
                 )}
               </p>
             ))}
             <div ref={bottomRef} />
           </div>
+          {loading && <progress style="width: 100%;"></progress>}
           <div>
             <input
               style="width: 100%;"
               value={input}
+              aria-busy={loading}
+              disabled={loading}
               onInput={(e) => setInput((e.target as HTMLInputElement).value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') sendMessage()
@@ -179,68 +196,77 @@ export default function ChatScreen() {
         </div>
         <aside style="flex: 1; min-width: 300px; position: sticky; top: 0; align-self: flex-start;">
           <h3>Tools</h3>
-          {tools.map((t) => (
-            <div>
-              <input
-                type="checkbox"
-                checked={!t.disabled}
-                onChange={() => useAppStore.getState().updateTool({ ...t, disabled: !t.disabled })}
-              />{' '}
-              {t.name}{' '}
-              <button
-                onClick={() => useAppStore.getState().removeTool(t.id)}
-                aria-label={`Delete ${t.name}`}
-              >
-                ✖
-              </button>
-            </div>
-          ))}
-          <button onClick={onAddTool}>Add Tool</button>
-          <button
-            onClick={() => setDialog({ mode: 'export', text: JSON.stringify(tools, null, 2) })}
-            style="margin-left: 0.5rem;"
-          >
-            Export
-          </button>
-          <button
-            onClick={() => {
-              if (!confirm('Import will overwrite existing tools. Continue?')) return
-              setDialog({ mode: 'import', text: '' })
-            }}
-            style="margin-left: 0.5rem;"
-          >
-            Import
-          </button>
+          <div role="group" style="margin-bottom: 0.5rem;">
+            <button onClick={onAddTool}>Add Tool</button>
+            <button
+              onClick={() => setDialog({ mode: 'export', text: JSON.stringify(tools, null, 2) })}
+            >
+              Export
+            </button>
+            <button
+              onClick={() => {
+                if (!confirm('Import will overwrite existing tools. Continue?')) return
+                setDialog({ mode: 'import', text: '' })
+              }}
+            >
+              Import
+            </button>
+          </div>
+          <div style={tools.length > 5 ? 'max-height: 10rem; overflow-y: auto;' : undefined}>
+            {tools.map((t) => (
+              <div>
+                <input
+                  type="checkbox"
+                  checked={!t.disabled}
+                  onChange={() =>
+                    useAppStore.getState().updateTool({ ...t, disabled: !t.disabled })
+                  }
+                />{' '}
+                {t.name}{' '}
+                <button
+                  onClick={() => useAppStore.getState().removeTool(t.id)}
+                  aria-label={`Delete ${t.name}`}
+                >
+                  ✖
+                </button>
+              </div>
+            ))}
+          </div>
           <h3>Stats</h3>
-          {lastUsage && (
-            <div>
-              <strong>Last:</strong>
-              {lastUsage.prompt_tokens !== undefined && (
-                <div>Prompt: {lastUsage.prompt_tokens}</div>
-              )}
-              {lastUsage.completion_tokens !== undefined && (
-                <div>Completion: {lastUsage.completion_tokens}</div>
-              )}
-              {lastUsage.total_tokens !== undefined && <div>Total: {lastUsage.total_tokens}</div>}
-            </div>
-          )}
-          {totalUsage && (
-            <div style="margin-top: 0.5rem;">
-              <strong>Session:</strong>
-              {totalUsage.prompt_tokens !== undefined && (
-                <div>Prompt: {totalUsage.prompt_tokens}</div>
-              )}
-              {totalUsage.completion_tokens !== undefined && (
-                <div>Completion: {totalUsage.completion_tokens}</div>
-              )}
-              {totalUsage.total_tokens !== undefined && <div>Total: {totalUsage.total_tokens}</div>}
-            </div>
+          {(lastUsage || totalUsage) && (
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Last</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>Prompt</th>
+                  <td>{lastUsage?.prompt_tokens ?? '-'}</td>
+                  <td>{totalUsage?.prompt_tokens ?? '-'}</td>
+                </tr>
+                <tr>
+                  <th>Completion</th>
+                  <td>{lastUsage?.completion_tokens ?? '-'}</td>
+                  <td>{totalUsage?.completion_tokens ?? '-'}</td>
+                </tr>
+                <tr>
+                  <th>Total</th>
+                  <td>{lastUsage?.total_tokens ?? '-'}</td>
+                  <td>{totalUsage?.total_tokens ?? '-'}</td>
+                </tr>
+              </tbody>
+            </table>
           )}
           <hr />
-          <button onClick={() => resetChat()}>Reset Chat</button>
-          <button onClick={() => clearTools()}>Clear All Tools</button>
-          <hr />
-          <button onClick={() => navigate('/settings')}>Settings</button>
+          <div role="group">
+            <button onClick={() => resetChat()}>Reset Chat</button>
+            <button onClick={() => clearTools()}>Clear All Tools</button>
+            <button onClick={() => navigate('/settings')}>Settings</button>
+          </div>
         </aside>
       </main>
       {dialog && (
