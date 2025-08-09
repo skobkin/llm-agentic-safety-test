@@ -79,10 +79,13 @@ export default function ChatScreen() {
         },
       }))
 
-    const apiMessages = messages
+    type ApiMessage = { role: 'user' | 'assistant' | 'system'; content: string }
+
+    const apiMessages: ApiMessage[] = messages
       .filter((m) => m.role !== 'tool' && m.role !== 'error' && m.role !== 'reasoning')
       .concat(userMessage)
-      .map((m) => ({ role: m.role, content: m.content }))
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+
     if (systemPrompt) apiMessages.unshift({ role: 'system', content: systemPrompt })
 
     const payload: Record<string, unknown> = {
