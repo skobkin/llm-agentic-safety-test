@@ -3,6 +3,7 @@ import { useLocation } from 'wouter-preact'
 import { useAppStore } from '../store'
 import type { ArgType, ChatMessage, ToolDefinition, Usage } from '../types'
 import Modal from '../components/Modal'
+import MarkdownMessage from '../components/MarkdownMessage'
 
 type ChatCompletionResponse = {
   error?: { message?: string }
@@ -214,10 +215,23 @@ export default function ChatScreen() {
         <div style="flex: 0 0 70%; display: flex; flex-direction: column;">
           <div style="flex: 1; overflow-y: auto;">
             {messages.map((m) => (
-              <div key={m.createdAt} style="margin-bottom: 0.25rem;">
-                {m.role === 'user' && <span>👨 {m.content}</span>}
-                {m.role === 'assistant' && <span>🤖 {m.content}</span>}
-                {m.role === 'error' && <span>{m.content}</span>}
+              <div
+                key={m.createdAt}
+                style="margin-bottom: 0.25rem; display: flex; gap: 0.25rem; align-items: flex-start;"
+              >
+                {m.role === 'user' && (
+                  <>
+                    <span>👨</span>
+                    <MarkdownMessage source={m.content} />
+                  </>
+                )}
+                {m.role === 'assistant' && (
+                  <>
+                    <span>🤖</span>
+                    <MarkdownMessage source={m.content} />
+                  </>
+                )}
+                {m.role === 'error' && <MarkdownMessage source={m.content} />}
                 {m.role === 'reasoning' && (
                   <details>
                     <summary>🤖💭</summary>

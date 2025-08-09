@@ -99,6 +99,10 @@ npm install
 npm run dev
 ```
 
+## Markdown Support
+
+Chat messages render a restricted subset of Markdown. Raw HTML, scripts, and iframes are ignored and sanitized. Standard formatting such as emphasis, lists, and code blocks are supported.
+
 ## Build
 
 ```bash
