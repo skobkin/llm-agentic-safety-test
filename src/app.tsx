@@ -12,7 +12,7 @@ export function App() {
     load()
   }, [load])
 
-  const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+  const base = new URL('.', window.location.href).pathname.replace(/\/$/, '')
 
   return (
     <Router base={base}>
