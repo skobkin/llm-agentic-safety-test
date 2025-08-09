@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { useLocation } from 'wouter-preact'
 import { useAppStore } from '../store'
-import type { ChatMessage, ToolDefinition } from '../types'
+import type { ArgType, ChatMessage, ToolDefinition } from '../types'
 
 export default function ChatScreen() {
   const { settings, messages, tools, addMessage, resetChat, addTool, clearTools, load } =
@@ -29,7 +29,7 @@ export default function ChatScreen() {
     setInput('')
 
     const payload = {
-      model: 'gpt-3.5-turbo',
+      model: settings.model,
       messages: messages
         .filter((m) => m.role !== 'tool')
         .concat(userMessage)
@@ -65,10 +65,12 @@ export default function ChatScreen() {
       if (toolCalls) {
         for (const call of toolCalls) {
           const args = JSON.parse(call.function.arguments)
+          const tool = tools.find((t) => t.name === call.function.name)
           await addMessage({
             role: 'tool',
             toolName: call.function.name,
             args,
+            result: tool?.returnValue,
             createdAt: Date.now(),
           })
         }
@@ -86,12 +88,25 @@ export default function ChatScreen() {
     const name = prompt('Tool name?')
     if (!name) return
     const description = prompt('Description?') || ''
+    let args: { name: string; type: ArgType }[] = []
+    const argsInput = prompt('Parameters as JSON array (e.g. [{"name":"city","type":"string"}])?')
+    if (argsInput) {
+      try {
+        const parsed = JSON.parse(argsInput) as { name: string; type: ArgType }[]
+        if (Array.isArray(parsed)) args = parsed
+      } catch {
+        // ignore parse errors
+      }
+    }
+    const returnType = (prompt('Return type (string/int/bool/object)?') || 'string') as ArgType
+    const returnValue = prompt('Return value?') || ''
     const tool: ToolDefinition = {
       id: crypto.randomUUID(),
       name,
       description,
-      args: [],
-      returnType: 'string',
+      args,
+      returnType,
+      returnValue,
       disabled: false,
       createdAt: Date.now(),
     }
@@ -99,7 +114,7 @@ export default function ChatScreen() {
   }
 
   return (
-    <div class="container" style="display: flex; gap: 1rem;">
+    <main class="container" style="display: flex; gap: 1rem; align-items: flex-start;">
       <div style="flex: 1; overflow-y: auto; max-height: 80vh;">
         {messages.map((m) => (
           <p>
@@ -107,7 +122,8 @@ export default function ChatScreen() {
             {m.role === 'assistant' && `🤖 ${m.content}`}
             {m.role === 'tool' && (
               <em>
-                🤖👉🔧 {m.toolName} {JSON.stringify(m.args)}
+                🤖👉🔧 {m.toolName} {JSON.stringify(m.args)}{' '}
+                {m.result !== undefined && `=> ${JSON.stringify(m.result)}`}
               </em>
             )}
           </p>
@@ -130,6 +146,8 @@ export default function ChatScreen() {
         <hr />
         <button onClick={() => resetChat()}>Reset Chat</button>
         <button onClick={() => clearTools()}>Clear All Tools</button>
+        <hr />
+        <button onClick={() => navigate('/settings')}>Settings</button>
       </aside>
       <div style="position: fixed; bottom: 1rem; left: 1rem; right: 320px;">
         <input
@@ -141,6 +159,6 @@ export default function ChatScreen() {
           }}
         />
       </div>
-    </div>
+    </main>
   )
 }
