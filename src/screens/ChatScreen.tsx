@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { useLocation } from 'wouter-preact'
 import { useAppStore } from '../store'
 import type { ArgType, ChatMessage, ToolDefinition, Usage } from '../types'
+import Modal from '../components/Modal'
 
 type ChatCompletionResponse = {
   error?: { message?: string }
@@ -36,6 +37,14 @@ export default function ChatScreen() {
   const [input, setInput] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const [dialog, setDialog] = useState<{ mode: 'export' | 'import'; text: string } | null>(null)
+  const [toolForm, setToolForm] = useState<{
+    tool?: ToolDefinition
+    name: string
+    description: string
+    args: string
+    returnType: ArgType
+    returnValue: string
+  } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [loading, setLoading] = useState(false)
 
@@ -178,33 +187,25 @@ export default function ChatScreen() {
     }
   }
 
-  const onAddTool = async () => {
-    const name = prompt('Tool name?')
-    if (!name) return
-    const description = prompt('Description?') || ''
-    let args: { name: string; type: ArgType }[] = []
-    const argsInput = prompt('Parameters as JSON array (e.g. [{"name":"city","type":"string"}])?')
-    if (argsInput) {
-      try {
-        const parsed = JSON.parse(argsInput) as { name: string; type: ArgType }[]
-        if (Array.isArray(parsed)) args = parsed
-      } catch {
-        // ignore parse errors
-      }
-    }
-    const returnType = (prompt('Return type (string/int/bool/object)?') || 'string') as ArgType
-    const returnValue = prompt('Return value?') || ''
-    const tool: ToolDefinition = {
-      id: crypto.randomUUID(),
-      name,
-      description,
-      args,
-      returnType,
-      returnValue,
-      disabled: false,
-      createdAt: Date.now(),
-    }
-    await addTool(tool)
+  const onAddTool = () => {
+    setToolForm({
+      name: '',
+      description: '',
+      args: '[]',
+      returnType: 'string',
+      returnValue: '',
+    })
+  }
+
+  const onEditTool = (t: ToolDefinition) => {
+    setToolForm({
+      tool: t,
+      name: t.name,
+      description: t.description,
+      args: JSON.stringify(t.args),
+      returnType: t.returnType,
+      returnValue: t.returnValue,
+    })
   }
 
   return (
@@ -299,12 +300,28 @@ export default function ChatScreen() {
                   }
                 />{' '}
                 {t.name}{' '}
-                <button
-                  onClick={() => useAppStore.getState().removeTool(t.id)}
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    onEditTool(t)
+                  }}
+                  aria-label={`Edit ${t.name}`}
+                  style="margin-left: 0.25rem;"
+                >
+                  ✎
+                </a>
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    useAppStore.getState().removeTool(t.id)
+                  }}
                   aria-label={`Delete ${t.name}`}
+                  style="margin-left: 0.25rem;"
                 >
                   ✖
-                </button>
+                </a>
               </div>
             ))}
           </div>
@@ -372,62 +389,169 @@ export default function ChatScreen() {
         </aside>
       </main>
       {dialog && (
-        <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;">
-          <div style="background: white; padding: 1rem; width: 90%; max-width: 500px;">
-            <textarea
-              ref={textareaRef}
-              style="width: 100%; height: 200px;"
-              value={dialog.text}
-              readOnly={dialog.mode === 'export'}
-              onInput={
-                dialog.mode === 'import'
-                  ? (e) =>
-                      setDialog({
-                        ...dialog,
-                        text: (e.target as HTMLTextAreaElement).value,
-                      })
-                  : undefined
+        <Modal>
+          <textarea
+            ref={textareaRef}
+            style="width: 100%; height: 200px;"
+            value={dialog.text}
+            readOnly={dialog.mode === 'export'}
+            onInput={
+              dialog.mode === 'import'
+                ? (e) =>
+                    setDialog({
+                      ...dialog,
+                      text: (e.target as HTMLTextAreaElement).value,
+                    })
+                : undefined
+            }
+          />
+          <div style="margin-top: 0.5rem; text-align: right;">
+            {dialog.mode === 'import' ? (
+              <button
+                onClick={async () => {
+                  try {
+                    const parsed = JSON.parse(dialog.text)
+                    if (Array.isArray(parsed)) {
+                      await useAppStore.getState().setTools(parsed)
+                      await setSystemPrompt('')
+                    } else {
+                      if (Array.isArray(parsed.tools)) {
+                        await useAppStore.getState().setTools(parsed.tools)
+                      }
+                      await setSystemPrompt(parsed.systemPrompt ?? '')
+                    }
+                    setDialog(null)
+                  } catch {
+                    alert('Invalid JSON')
+                  }
+                }}
+              >
+                Import
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  navigator.clipboard?.writeText(dialog.text)
+                  setDialog(null)
+                }}
+              >
+                Copy
+              </button>
+            )}
+            <button onClick={() => setDialog(null)} style="margin-left: 0.5rem;">
+              Close
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {toolForm && (
+        <Modal>
+          <h3>{toolForm.tool ? 'Edit Tool' : 'Add Tool'}</h3>
+          <label>
+            Name
+            <input
+              value={toolForm.name}
+              onInput={(e) =>
+                setToolForm({ ...toolForm, name: (e.target as HTMLInputElement).value })
               }
             />
-            <div style="margin-top: 0.5rem; text-align: right;">
-              {dialog.mode === 'import' ? (
-                <button
-                  onClick={async () => {
-                    try {
-                      const parsed = JSON.parse(dialog.text)
-                      if (Array.isArray(parsed)) {
-                        await useAppStore.getState().setTools(parsed)
-                        await setSystemPrompt('')
-                      } else {
-                        if (Array.isArray(parsed.tools)) {
-                          await useAppStore.getState().setTools(parsed.tools)
-                        }
-                        await setSystemPrompt(parsed.systemPrompt ?? '')
-                      }
-                      setDialog(null)
-                    } catch {
-                      alert('Invalid JSON')
+          </label>
+          <label>
+            Description
+            <input
+              value={toolForm.description}
+              onInput={(e) =>
+                setToolForm({
+                  ...toolForm,
+                  description: (e.target as HTMLInputElement).value,
+                })
+              }
+            />
+          </label>
+          <label>
+            Parameters (JSON)
+            <textarea
+              style="width: 100%; height: 100px;"
+              value={toolForm.args}
+              onInput={(e) =>
+                setToolForm({ ...toolForm, args: (e.target as HTMLTextAreaElement).value })
+              }
+            />
+          </label>
+          <label>
+            Return Type
+            <select
+              value={toolForm.returnType}
+              onInput={(e) =>
+                setToolForm({
+                  ...toolForm,
+                  returnType: (e.target as HTMLSelectElement).value as ArgType,
+                })
+              }
+            >
+              <option value="string">string</option>
+              <option value="int">int</option>
+              <option value="bool">bool</option>
+              <option value="object">object</option>
+            </select>
+          </label>
+          <label>
+            Return Value
+            <input
+              value={toolForm.returnValue}
+              onInput={(e) =>
+                setToolForm({
+                  ...toolForm,
+                  returnValue: (e.target as HTMLInputElement).value,
+                })
+              }
+            />
+          </label>
+          <div style="margin-top: 0.5rem; text-align: right;">
+            <button
+              onClick={async () => {
+                if (!toolForm) return
+                try {
+                  const args = JSON.parse(toolForm.args) as {
+                    name: string
+                    type: ArgType
+                  }[]
+                  if (toolForm.tool) {
+                    await useAppStore.getState().updateTool({
+                      ...toolForm.tool,
+                      name: toolForm.name,
+                      description: toolForm.description,
+                      args,
+                      returnType: toolForm.returnType,
+                      returnValue: toolForm.returnValue,
+                    })
+                  } else {
+                    const tool: ToolDefinition = {
+                      id: crypto.randomUUID(),
+                      name: toolForm.name,
+                      description: toolForm.description,
+                      args,
+                      returnType: toolForm.returnType,
+                      returnValue: toolForm.returnValue,
+                      disabled: false,
+                      createdAt: Date.now(),
                     }
-                  }}
-                >
-                  Import
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    navigator.clipboard?.writeText(dialog.text)
-                    setDialog(null)
-                  }}
-                >
-                  Copy
-                </button>
-              )}
-              <button onClick={() => setDialog(null)} style="margin-left: 0.5rem;">
-                Close
-              </button>
-            </div>
+                    await addTool(tool)
+                  }
+                  setToolForm(null)
+                } catch {
+                  alert('Invalid parameters JSON')
+                }
+              }}
+            >
+              Save
+            </button>
+            <button onClick={() => setToolForm(null)} style="margin-left: 0.5rem;">
+              Cancel
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   )
