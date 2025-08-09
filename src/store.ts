@@ -14,6 +14,7 @@ interface AppState {
   addMessage: (m: ChatMessage) => Promise<void>
   addTool: (t: ToolDefinition) => Promise<void>
   updateTool: (t: ToolDefinition) => Promise<void>
+  setTools: (ts: ToolDefinition[]) => Promise<void>
   removeTool: (id: string) => Promise<void>
   resetChat: () => Promise<void>
   clearTools: () => Promise<void>
@@ -42,6 +43,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const tools = get().tools.map((tool) => (tool.id === t.id ? t : tool))
     await localforage.setItem(TOOLS_KEY, tools)
     set({ tools })
+  },
+  async setTools(ts) {
+    await localforage.setItem(TOOLS_KEY, ts)
+    set({ tools: ts })
   },
   async removeTool(id) {
     const tools = get().tools.filter((t) => t.id !== id)

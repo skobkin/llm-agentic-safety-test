@@ -29,4 +29,35 @@ describe('store', () => {
     })
     expect(useAppStore.getState().tools).toHaveLength(1)
   })
+
+  it('removes tools', async () => {
+    await useAppStore.getState().addTool({
+      id: '1',
+      name: 't',
+      description: '',
+      args: [],
+      returnType: 'string',
+      returnValue: 'ok',
+      disabled: false,
+      createdAt: 1,
+    })
+    await useAppStore.getState().removeTool('1')
+    expect(useAppStore.getState().tools).toHaveLength(0)
+  })
+
+  it('sets tools list', async () => {
+    await useAppStore.getState().setTools([
+      {
+        id: '1',
+        name: 't',
+        description: '',
+        args: [],
+        returnType: 'string',
+        returnValue: 'ok',
+        disabled: false,
+        createdAt: 1,
+      },
+    ])
+    expect(useAppStore.getState().tools).toHaveLength(1)
+  })
 })
