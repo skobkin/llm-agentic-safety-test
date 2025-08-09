@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import Joi from 'joi'
 import { useLocation } from 'wouter-preact'
 import { useAppStore } from '../store'
@@ -17,6 +17,20 @@ export default function SettingsScreen() {
   const [error, setError] = useState<string>()
   const [, navigate] = useLocation()
   const setSettings = useAppStore((s) => s.setSettings)
+  const settings = useAppStore((s) => s.settings)
+  const load = useAppStore((s) => s.load)
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  useEffect(() => {
+    if (settings) {
+      setUrl(settings.apiBaseUrl)
+      setToken(settings.apiToken ?? '')
+      setModel(settings.model)
+    }
+  }, [settings])
 
   const onSubmit = async (e: Event) => {
     e.preventDefault()
