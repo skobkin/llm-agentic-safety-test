@@ -11,6 +11,7 @@ export default defineConfig({
       'react/jsx-runtime': 'preact/jsx-runtime',
     },
   },
+  // @ts-expect-error - Vitest config field not in Vite types
   test: {
     environment: 'jsdom',
   },
