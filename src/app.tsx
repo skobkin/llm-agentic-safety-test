@@ -12,8 +12,10 @@ export function App() {
     load()
   }, [load])
 
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+
   return (
-    <Router>
+    <Router base={base}>
       <Switch>
         <Route path="/settings" component={SettingsScreen} />
         <Route path="/chat" component={ChatScreen} />
