@@ -40,7 +40,7 @@ export default function ChatScreen() {
     const payload = {
       model: settings.model,
       messages: messages
-        .filter((m) => m.role !== 'tool')
+        .filter((m) => m.role !== 'tool' && m.role !== 'error')
         .concat(userMessage)
         .map((m) => ({ role: m.role, content: m.content })),
       tools: tools
@@ -68,6 +68,15 @@ export default function ChatScreen() {
         body: JSON.stringify(payload),
       })
       const data = await res.json()
+      if (!res.ok || data.error) {
+        const message = data.error?.message ?? `${res.status} ${res.statusText}`
+        await addMessage({
+          role: 'error',
+          content: `❌ API: ${message}`,
+          createdAt: Date.now(),
+        })
+        return
+      }
       const content = data.choices?.[0]?.message?.content ?? '[no reply]'
       await addMessage({ role: 'assistant', content, createdAt: Date.now() })
       const toolCalls = data.choices?.[0]?.message?.tool_calls
@@ -85,9 +94,10 @@ export default function ChatScreen() {
         }
       }
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
       await addMessage({
-        role: 'assistant',
-        content: String(err),
+        role: 'error',
+        content: `❌ API: ${message}`,
         createdAt: Date.now(),
       })
     }
@@ -124,23 +134,36 @@ export default function ChatScreen() {
 
   return (
     <>
-      <main class="container" style="display: flex; gap: 1rem; align-items: flex-start;">
-        <div style="flex: 1; overflow-y: auto; max-height: 80vh;">
-          {messages.map((m) => (
-            <p>
-              {m.role === 'user' && `👨 ${m.content}`}
-              {m.role === 'assistant' && `🤖 ${m.content}`}
-              {m.role === 'tool' && (
-                <em>
-                  🤖👉🔧 {m.toolName} {JSON.stringify(m.args)}{' '}
-                  {m.result !== undefined && `=> ${JSON.stringify(m.result)}`}
-                </em>
-              )}
-            </p>
-          ))}
-          <div ref={bottomRef} />
+      <main class="container" style="display: flex; gap: 1rem; height: 100%;">
+        <div style="flex: 0 0 70%; display: flex; flex-direction: column;">
+          <div style="flex: 1; overflow-y: auto;">
+            {messages.map((m) => (
+              <p>
+                {m.role === 'user' && `👨 ${m.content}`}
+                {m.role === 'assistant' && `🤖 ${m.content}`}
+                {m.role === 'error' && m.content}
+                {m.role === 'tool' && (
+                  <em>
+                    🤖👉🔧 {m.toolName} {JSON.stringify(m.args)}{' '}
+                    {m.result !== undefined && `=> ${JSON.stringify(m.result)}`}
+                  </em>
+                )}
+              </p>
+            ))}
+            <div ref={bottomRef} />
+          </div>
+          <div>
+            <input
+              style="width: 100%;"
+              value={input}
+              onInput={(e) => setInput((e.target as HTMLInputElement).value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') sendMessage()
+              }}
+            />
+          </div>
         </div>
-        <aside style="width: 300px;">
+        <aside style="flex: 1; min-width: 300px; position: sticky; top: 0; align-self: flex-start;">
           <h3>Tools</h3>
           {tools.map((t) => (
             <div>
@@ -180,16 +203,6 @@ export default function ChatScreen() {
           <hr />
           <button onClick={() => navigate('/settings')}>Settings</button>
         </aside>
-        <div style="position: fixed; bottom: 1rem; left: 1rem; right: 320px;">
-          <input
-            style="width: 100%;"
-            value={input}
-            onInput={(e) => setInput((e.target as HTMLInputElement).value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') sendMessage()
-            }}
-          />
-        </div>
       </main>
       {dialog && (
         <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;">
