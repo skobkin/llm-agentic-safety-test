@@ -4,8 +4,19 @@ import { useAppStore } from '../store'
 import type { ArgType, ChatMessage, ToolDefinition } from '../types'
 
 export default function ChatScreen() {
-  const { settings, messages, tools, addMessage, resetChat, addTool, clearTools, load } =
-    useAppStore()
+  const {
+    settings,
+    messages,
+    tools,
+    addMessage,
+    resetChat,
+    addTool,
+    clearTools,
+    load,
+    lastUsage,
+    totalUsage,
+    addUsage,
+  } = useAppStore()
   const [, navigate] = useLocation()
   const [input, setInput] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -92,6 +103,9 @@ export default function ChatScreen() {
             createdAt: Date.now(),
           })
         }
+      }
+      if (data.usage) {
+        addUsage(data.usage)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -197,6 +211,31 @@ export default function ChatScreen() {
           >
             Import
           </button>
+          <h3>Stats</h3>
+          {lastUsage && (
+            <div>
+              <strong>Last:</strong>
+              {lastUsage.prompt_tokens !== undefined && (
+                <div>Prompt: {lastUsage.prompt_tokens}</div>
+              )}
+              {lastUsage.completion_tokens !== undefined && (
+                <div>Completion: {lastUsage.completion_tokens}</div>
+              )}
+              {lastUsage.total_tokens !== undefined && <div>Total: {lastUsage.total_tokens}</div>}
+            </div>
+          )}
+          {totalUsage && (
+            <div style="margin-top: 0.5rem;">
+              <strong>Session:</strong>
+              {totalUsage.prompt_tokens !== undefined && (
+                <div>Prompt: {totalUsage.prompt_tokens}</div>
+              )}
+              {totalUsage.completion_tokens !== undefined && (
+                <div>Completion: {totalUsage.completion_tokens}</div>
+              )}
+              {totalUsage.total_tokens !== undefined && <div>Total: {totalUsage.total_tokens}</div>}
+            </div>
+          )}
           <hr />
           <button onClick={() => resetChat()}>Reset Chat</button>
           <button onClick={() => clearTools()}>Clear All Tools</button>

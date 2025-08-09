@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import localforage from 'localforage'
-import type { Settings, ChatMessage, ToolDefinition } from './types'
+import type { Settings, ChatMessage, ToolDefinition, Usage } from './types'
 
 const SETTINGS_KEY = 'settings'
 const TOOLS_KEY = 'tools'
@@ -10,6 +10,8 @@ interface AppState {
   settings?: Settings
   messages: ChatMessage[]
   tools: ToolDefinition[]
+  lastUsage?: Usage
+  totalUsage?: Usage
   setSettings: (s: Settings) => Promise<void>
   addMessage: (m: ChatMessage) => Promise<void>
   addTool: (t: ToolDefinition) => Promise<void>
@@ -19,12 +21,15 @@ interface AppState {
   resetChat: () => Promise<void>
   clearTools: () => Promise<void>
   load: () => Promise<void>
+  addUsage: (u: Usage) => void
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
   settings: undefined,
   messages: [],
   tools: [],
+  lastUsage: undefined,
+  totalUsage: undefined,
   async setSettings(s) {
     await localforage.setItem(SETTINGS_KEY, s)
     set({ settings: s })
@@ -55,7 +60,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   async resetChat() {
     await localforage.removeItem(HISTORY_KEY)
-    set({ messages: [] })
+    set({ messages: [], lastUsage: undefined, totalUsage: undefined })
   },
   async clearTools() {
     await localforage.removeItem(TOOLS_KEY)
@@ -71,6 +76,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       settings: settings ?? undefined,
       messages: messages ?? [],
       tools: tools ?? [],
+    })
+  },
+  addUsage(u) {
+    const prev = get().totalUsage ?? {}
+    set({
+      lastUsage: u,
+      totalUsage: {
+        prompt_tokens: (prev.prompt_tokens ?? 0) + (u.prompt_tokens ?? 0),
+        completion_tokens: (prev.completion_tokens ?? 0) + (u.completion_tokens ?? 0),
+        total_tokens: (prev.total_tokens ?? 0) + (u.total_tokens ?? 0),
+      },
     })
   },
 }))

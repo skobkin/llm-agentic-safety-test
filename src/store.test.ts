@@ -60,4 +60,32 @@ describe('store', () => {
     ])
     expect(useAppStore.getState().tools).toHaveLength(1)
   })
+
+  it('tracks usage stats', () => {
+    useAppStore.getState().addUsage({ prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 })
+    expect(useAppStore.getState().lastUsage).toEqual({
+      prompt_tokens: 1,
+      completion_tokens: 2,
+      total_tokens: 3,
+    })
+    useAppStore.getState().addUsage({ prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 })
+    expect(useAppStore.getState().totalUsage).toEqual({
+      prompt_tokens: 3,
+      completion_tokens: 5,
+      total_tokens: 8,
+    })
+  })
+
+  it('clears stats when chat is reset', async () => {
+    useAppStore.getState().addUsage({ prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 })
+    await useAppStore.getState().addMessage({
+      role: 'user',
+      content: 'hi',
+      createdAt: 1,
+    })
+    await useAppStore.getState().resetChat()
+    expect(useAppStore.getState().messages).toHaveLength(0)
+    expect(useAppStore.getState().lastUsage).toBeUndefined()
+    expect(useAppStore.getState().totalUsage).toBeUndefined()
+  })
 })
