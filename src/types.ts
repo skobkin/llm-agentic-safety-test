@@ -7,6 +7,7 @@ export type Settings = {
 export type ChatMessage =
   | { role: 'user'; content: string; createdAt: number }
   | { role: 'assistant'; content: string; createdAt: number }
+  | { role: 'error'; content: string; createdAt: number }
   | {
       role: 'tool'
       toolName: string

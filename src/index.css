@@ -24,10 +24,15 @@ a:hover {
 
 body {
   margin: 0;
-  display: grid;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+}
+
+#app {
+  width: 100%;
+  height: 100vh;
+  box-sizing: border-box;
+  padding: 1rem;
 }
 
 h1 {
