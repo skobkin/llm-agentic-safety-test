@@ -7,23 +7,25 @@ import type { Settings } from '../types'
 const schema = Joi.object<Settings>({
   apiBaseUrl: Joi.string().uri().required(),
   apiToken: Joi.string().optional(),
+  model: Joi.string().required(),
 })
 
 export default function SettingsScreen() {
   const [apiBaseUrl, setUrl] = useState('')
   const [apiToken, setToken] = useState('')
+  const [model, setModel] = useState('')
   const [error, setError] = useState<string>()
   const [, navigate] = useLocation()
   const setSettings = useAppStore((s) => s.setSettings)
 
   const onSubmit = async (e: Event) => {
     e.preventDefault()
-    const { error } = schema.validate({ apiBaseUrl, apiToken })
+    const { error } = schema.validate({ apiBaseUrl, apiToken, model })
     if (error) {
       setError(error.message)
       return
     }
-    await setSettings({ apiBaseUrl, apiToken })
+    await setSettings({ apiBaseUrl, apiToken, model })
     navigate('/chat')
   }
 
@@ -34,6 +36,10 @@ export default function SettingsScreen() {
         <label>
           API Base URL
           <input value={apiBaseUrl} onInput={(e) => setUrl((e.target as HTMLInputElement).value)} />
+        </label>
+        <label>
+          Model
+          <input value={model} onInput={(e) => setModel((e.target as HTMLInputElement).value)} />
         </label>
         <label>
           Token

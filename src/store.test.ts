@@ -23,6 +23,7 @@ describe('store', () => {
       description: '',
       args: [],
       returnType: 'string',
+      returnValue: 'ok',
       disabled: false,
       createdAt: 1,
     })
