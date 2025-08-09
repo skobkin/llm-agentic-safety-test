@@ -1,7 +1,19 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { useLocation } from 'wouter-preact'
 import { useAppStore } from '../store'
-import type { ArgType, ChatMessage, ToolDefinition } from '../types'
+import type { ArgType, ChatMessage, ToolDefinition, Usage } from '../types'
+
+type ChatCompletionResponse = {
+  error?: { message?: string }
+  choices?: {
+    message?: {
+      content?: string
+      reasoning?: string
+      tool_calls?: { function: { name: string; arguments?: string } }[]
+    }
+  }[]
+  usage?: Usage
+}
 
 export default function ChatScreen() {
   const {
@@ -9,6 +21,7 @@ export default function ChatScreen() {
     messages,
     tools,
     addMessage,
+    removeMessage,
     resetChat,
     addTool,
     clearTools,
@@ -16,6 +29,8 @@ export default function ChatScreen() {
     lastUsage,
     totalUsage,
     addUsage,
+    systemPrompt,
+    setSystemPrompt,
   } = useAppStore()
   const [, navigate] = useLocation()
   const [input, setInput] = useState('')
@@ -64,28 +79,46 @@ export default function ChatScreen() {
         },
       }))
 
+    type ApiMessage = { role: 'user' | 'assistant' | 'system'; content: string }
+
+    const apiMessages: ApiMessage[] = messages
+      .filter((m) => m.role !== 'tool' && m.role !== 'error' && m.role !== 'reasoning')
+      .concat(userMessage)
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+
+    if (systemPrompt) apiMessages.unshift({ role: 'system', content: systemPrompt })
+
     const payload: Record<string, unknown> = {
       model: settings.model,
-      messages: messages
-        .filter((m) => m.role !== 'tool' && m.role !== 'error')
-        .concat(userMessage)
-        .map((m) => ({ role: m.role, content: m.content })),
+      messages: apiMessages,
       tool_choice: activeTools.length > 0 ? 'auto' : 'none',
+      usage: { include: true },
     }
     if (activeTools.length > 0) payload.tools = activeTools
 
     try {
-      const res = await fetch(`${settings.apiBaseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(settings.apiToken ? { Authorization: `Bearer ${settings.apiToken}` } : {}),
-        },
-        body: JSON.stringify(payload),
-      })
-      const data = await res.json()
-      if (!res.ok || data.error) {
-        const message = data.error?.message ?? `${res.status} ${res.statusText}`
+      let data: ChatCompletionResponse
+      try {
+        const res = await fetch(`${settings.apiBaseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(settings.apiToken ? { Authorization: `Bearer ${settings.apiToken}` } : {}),
+          },
+          body: JSON.stringify(payload),
+        })
+        data = (await res.json()) as ChatCompletionResponse
+        if (!res.ok || data.error) {
+          const message = data.error?.message ?? `${res.status} ${res.statusText}`
+          await addMessage({
+            role: 'error',
+            content: `❌ API: ${message}`,
+            createdAt: Date.now(),
+          })
+          return
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
         await addMessage({
           role: 'error',
           content: `❌ API: ${message}`,
@@ -93,37 +126,51 @@ export default function ChatScreen() {
         })
         return
       }
-      const content = data.choices?.[0]?.message?.content ?? '[no reply]'
-      await addMessage({ role: 'assistant', content, createdAt: Date.now() })
-      const toolCalls = data.choices?.[0]?.message?.tool_calls
-      if (toolCalls) {
-        for (const call of toolCalls) {
-          let args: Record<string, unknown> = {}
-          try {
-            if (call.function.arguments) {
-              args = JSON.parse(call.function.arguments)
-            }
-          } catch {
-            // ignore parse errors
-          }
-          const tool = tools.find((t) => t.name === call.function.name)
-          await addMessage({
-            role: 'tool',
-            toolName: call.function.name,
-            args,
-            result: tool?.returnValue,
-            createdAt: Date.now(),
-          })
+
+      try {
+        const reasoning = data.choices?.[0]?.message?.reasoning
+        if (reasoning) {
+          await addMessage({ role: 'reasoning', content: reasoning, createdAt: Date.now() })
         }
-      }
-      if (data.usage) {
-        addUsage(data.usage)
+        const content = data.choices?.[0]?.message?.content ?? '[no reply]'
+        await addMessage({ role: 'assistant', content, createdAt: Date.now() })
+        const toolCalls = data.choices?.[0]?.message?.tool_calls
+        if (toolCalls) {
+          for (const call of toolCalls) {
+            let args: Record<string, unknown> = {}
+            try {
+              if (call.function.arguments) {
+                args = JSON.parse(call.function.arguments)
+              }
+            } catch {
+              // ignore parse errors
+            }
+            const tool = tools.find((t) => t.name === call.function.name)
+            await addMessage({
+              role: 'tool',
+              toolName: call.function.name,
+              args,
+              result: tool?.returnValue,
+              createdAt: Date.now(),
+            })
+          }
+        }
+        if (data.usage) {
+          addUsage(data.usage)
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        await addMessage({
+          role: 'error',
+          content: `❌ App: ${message}`,
+          createdAt: Date.now(),
+        })
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       await addMessage({
         role: 'error',
-        content: `❌ API: ${message}`,
+        content: `❌ App: ${message}`,
         createdAt: Date.now(),
       })
     } finally {
@@ -166,17 +213,33 @@ export default function ChatScreen() {
         <div style="flex: 0 0 70%; display: flex; flex-direction: column;">
           <div style="flex: 1; overflow-y: auto;">
             {messages.map((m) => (
-              <p>
-                {m.role === 'user' && `👨 ${m.content}`}
-                {m.role === 'assistant' && `🤖 ${m.content}`}
-                {m.role === 'error' && m.content}
+              <div key={m.createdAt} style="margin-bottom: 0.25rem;">
+                {m.role === 'user' && <span>👨 {m.content}</span>}
+                {m.role === 'assistant' && <span>🤖 {m.content}</span>}
+                {m.role === 'error' && <span>{m.content}</span>}
+                {m.role === 'reasoning' && (
+                  <details>
+                    <summary>🤖💭</summary>
+                    <pre style="white-space: pre-wrap;">{m.content}</pre>
+                  </details>
+                )}
                 {m.role === 'tool' && (
                   <>
                     🤖🔧 <mark>{m.toolName}()</mark> {JSON.stringify(m.args)}{' '}
                     {m.result !== undefined && `=> ${JSON.stringify(m.result)}`}
                   </>
                 )}
-              </p>
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    removeMessage(m.createdAt)
+                  }}
+                  style="margin-left: 0.5rem;"
+                >
+                  x
+                </a>
+              </div>
             ))}
             <div ref={bottomRef} />
           </div>
@@ -195,11 +258,24 @@ export default function ChatScreen() {
           </div>
         </div>
         <aside style="flex: 1; min-width: 300px; position: sticky; top: 0; align-self: flex-start;">
+          <details>
+            <summary>System Prompt</summary>
+            <textarea
+              style="width: 100%;"
+              value={systemPrompt}
+              onInput={(e) => setSystemPrompt((e.target as HTMLTextAreaElement).value)}
+            />
+          </details>
           <h3>Tools</h3>
           <div role="group" style="margin-bottom: 0.5rem;">
             <button onClick={onAddTool}>Add Tool</button>
             <button
-              onClick={() => setDialog({ mode: 'export', text: JSON.stringify(tools, null, 2) })}
+              onClick={() =>
+                setDialog({
+                  mode: 'export',
+                  text: JSON.stringify({ systemPrompt, tools }, null, 2),
+                })
+              }
             >
               Export
             </button>
@@ -239,24 +315,50 @@ export default function ChatScreen() {
                 <tr>
                   <th></th>
                   <th>Last</th>
+                  <th>$</th>
                   <th>Total</th>
+                  <th>$</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <th>Prompt</th>
                   <td>{lastUsage?.prompt_tokens ?? '-'}</td>
+                  <td>
+                    {lastUsage?.prompt_cost !== undefined ? lastUsage.prompt_cost.toFixed(4) : '-'}
+                  </td>
                   <td>{totalUsage?.prompt_tokens ?? '-'}</td>
+                  <td>
+                    {totalUsage?.prompt_cost !== undefined
+                      ? totalUsage.prompt_cost.toFixed(4)
+                      : '-'}
+                  </td>
                 </tr>
                 <tr>
                   <th>Completion</th>
                   <td>{lastUsage?.completion_tokens ?? '-'}</td>
+                  <td>
+                    {lastUsage?.completion_cost !== undefined
+                      ? lastUsage.completion_cost.toFixed(4)
+                      : '-'}
+                  </td>
                   <td>{totalUsage?.completion_tokens ?? '-'}</td>
+                  <td>
+                    {totalUsage?.completion_cost !== undefined
+                      ? totalUsage.completion_cost.toFixed(4)
+                      : '-'}
+                  </td>
                 </tr>
                 <tr>
                   <th>Total</th>
                   <td>{lastUsage?.total_tokens ?? '-'}</td>
+                  <td>
+                    {lastUsage?.total_cost !== undefined ? lastUsage.total_cost.toFixed(4) : '-'}
+                  </td>
                   <td>{totalUsage?.total_tokens ?? '-'}</td>
+                  <td>
+                    {totalUsage?.total_cost !== undefined ? totalUsage.total_cost.toFixed(4) : '-'}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -292,8 +394,16 @@ export default function ChatScreen() {
                 <button
                   onClick={async () => {
                     try {
-                      const parsed = JSON.parse(dialog.text) as ToolDefinition[]
-                      await useAppStore.getState().setTools(parsed)
+                      const parsed = JSON.parse(dialog.text)
+                      if (Array.isArray(parsed)) {
+                        await useAppStore.getState().setTools(parsed)
+                        await setSystemPrompt('')
+                      } else {
+                        if (Array.isArray(parsed.tools)) {
+                          await useAppStore.getState().setTools(parsed.tools)
+                        }
+                        await setSystemPrompt(parsed.systemPrompt ?? '')
+                      }
                       setDialog(null)
                     } catch {
                       alert('Invalid JSON')

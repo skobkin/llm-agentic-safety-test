@@ -5,6 +5,7 @@ import type { Settings, ChatMessage, ToolDefinition, Usage } from './types'
 const SETTINGS_KEY = 'settings'
 const TOOLS_KEY = 'tools'
 const HISTORY_KEY = 'history_default'
+const SYSTEM_PROMPT_KEY = 'system_prompt'
 
 interface AppState {
   settings?: Settings
@@ -12,8 +13,10 @@ interface AppState {
   tools: ToolDefinition[]
   lastUsage?: Usage
   totalUsage?: Usage
+  systemPrompt: string
   setSettings: (s: Settings) => Promise<void>
   addMessage: (m: ChatMessage) => Promise<void>
+  removeMessage: (createdAt: number) => Promise<void>
   addTool: (t: ToolDefinition) => Promise<void>
   updateTool: (t: ToolDefinition) => Promise<void>
   setTools: (ts: ToolDefinition[]) => Promise<void>
@@ -22,6 +25,7 @@ interface AppState {
   clearTools: () => Promise<void>
   load: () => Promise<void>
   addUsage: (u: Usage) => void
+  setSystemPrompt: (p: string) => Promise<void>
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -30,12 +34,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   tools: [],
   lastUsage: undefined,
   totalUsage: undefined,
+  systemPrompt: '',
   async setSettings(s) {
     await localforage.setItem(SETTINGS_KEY, s)
     set({ settings: s })
   },
   async addMessage(m) {
     const msgs = [...get().messages, m]
+    await localforage.setItem(HISTORY_KEY, msgs)
+    set({ messages: msgs })
+  },
+  async removeMessage(createdAt) {
+    const msgs = get().messages.filter((m) => m.createdAt !== createdAt)
     await localforage.setItem(HISTORY_KEY, msgs)
     set({ messages: msgs })
   },
@@ -67,15 +77,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ tools: [] })
   },
   async load() {
-    const [settings, messages, tools] = await Promise.all([
+    const [settings, messages, tools, systemPrompt] = await Promise.all([
       localforage.getItem<Settings>(SETTINGS_KEY),
       localforage.getItem<ChatMessage[]>(HISTORY_KEY),
       localforage.getItem<ToolDefinition[]>(TOOLS_KEY),
+      localforage.getItem<string>(SYSTEM_PROMPT_KEY),
     ])
     set({
       settings: settings ?? undefined,
       messages: messages ?? [],
       tools: tools ?? [],
+      systemPrompt: systemPrompt ?? '',
     })
   },
   addUsage(u) {
@@ -86,7 +98,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         prompt_tokens: (prev.prompt_tokens ?? 0) + (u.prompt_tokens ?? 0),
         completion_tokens: (prev.completion_tokens ?? 0) + (u.completion_tokens ?? 0),
         total_tokens: (prev.total_tokens ?? 0) + (u.total_tokens ?? 0),
+        prompt_cost: (prev.prompt_cost ?? 0) + (u.prompt_cost ?? 0),
+        completion_cost: (prev.completion_cost ?? 0) + (u.completion_cost ?? 0),
+        total_cost: (prev.total_cost ?? 0) + (u.total_cost ?? 0),
       },
     })
+  },
+  async setSystemPrompt(p) {
+    await localforage.setItem(SYSTEM_PROMPT_KEY, p)
+    set({ systemPrompt: p })
   },
 }))
