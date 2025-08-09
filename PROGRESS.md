@@ -8,3 +8,4 @@
 - Added basic routing and message/tool handling logic.
 - Added unit tests for store and Dockerfile, README, and architecture diagram.
 - Added GitHub Actions workflows for linting, testing, build artifacts, Pages deploy on tags, and Docker image publishing; updated build config for Vitest.
+- Fixed GitHub Pages deployment by using relative asset paths in Vite and index.html.
