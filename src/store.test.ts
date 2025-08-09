@@ -62,18 +62,49 @@ describe('store', () => {
   })
 
   it('tracks usage stats', () => {
-    useAppStore.getState().addUsage({ prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 })
+    useAppStore.getState().addUsage({
+      prompt_tokens: 1,
+      completion_tokens: 2,
+      total_tokens: 3,
+      prompt_cost: 0.1,
+      completion_cost: 0.2,
+      total_cost: 0.3,
+    })
     expect(useAppStore.getState().lastUsage).toEqual({
       prompt_tokens: 1,
       completion_tokens: 2,
       total_tokens: 3,
+      prompt_cost: 0.1,
+      completion_cost: 0.2,
+      total_cost: 0.3,
     })
-    useAppStore.getState().addUsage({ prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 })
-    expect(useAppStore.getState().totalUsage).toEqual({
+    useAppStore.getState().addUsage({
+      prompt_tokens: 2,
+      completion_tokens: 3,
+      total_tokens: 5,
+      prompt_cost: 0.2,
+      completion_cost: 0.3,
+      total_cost: 0.5,
+    })
+    const total = useAppStore.getState().totalUsage
+    expect(total).toMatchObject({
       prompt_tokens: 3,
       completion_tokens: 5,
       total_tokens: 8,
     })
+    expect(total?.prompt_cost).toBeCloseTo(0.3)
+    expect(total?.completion_cost).toBeCloseTo(0.5)
+    expect(total?.total_cost).toBeCloseTo(0.8)
+  })
+
+  it('removes messages', async () => {
+    await useAppStore.getState().addMessage({
+      role: 'user',
+      content: 'hi',
+      createdAt: 1,
+    })
+    await useAppStore.getState().removeMessage(1)
+    expect(useAppStore.getState().messages).toHaveLength(0)
   })
 
   it('clears stats when chat is reset', async () => {

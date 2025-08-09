@@ -8,6 +8,7 @@ export type ChatMessage =
   | { role: 'user'; content: string; createdAt: number }
   | { role: 'assistant'; content: string; createdAt: number }
   | { role: 'error'; content: string; createdAt: number }
+  | { role: 'reasoning'; content: string; createdAt: number }
   | {
       role: 'tool'
       toolName: string
@@ -33,4 +34,7 @@ export type Usage = {
   prompt_tokens?: number
   completion_tokens?: number
   total_tokens?: number
+  prompt_cost?: number
+  completion_cost?: number
+  total_cost?: number
 }
