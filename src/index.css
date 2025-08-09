@@ -71,3 +71,17 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+.markdown-message {
+  overflow-wrap: anywhere;
+}
+
+.markdown-message pre,
+.markdown-message ul,
+.markdown-message ol,
+.markdown-message table,
+.markdown-message blockquote {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+

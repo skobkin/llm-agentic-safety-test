@@ -110,3 +110,9 @@ npm run build
 ```bash
 npm test
 ```
+
+## Markdown Support
+
+Messages accept a safe subset of Markdown. Formatting such as headings, lists,
+bold/italic text, links, code blocks and tables is supported. Raw HTML, scripts
+and iframes are stripped during rendering.
