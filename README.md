@@ -1,5 +1,7 @@
 # LLM tool calling SPA Client
 
+![banner](img/banner.webp)
+
 Lightweight single-page app for interacting with OpenAI-compatible APIs. It allows you to simulate simple agentic workflow with tool calling.
 
 You can also use it to perform model safety tests by simulating situations dangerous to the operator.
