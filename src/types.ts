@@ -6,7 +6,12 @@ export type Settings = {
 
 export type ChatMessage =
   | { role: 'user'; content: string; createdAt: number }
-  | { role: 'assistant'; content: string; createdAt: number }
+  | {
+      role: 'assistant'
+      content: string
+      createdAt: number
+      toolCalls?: { id: string; function: { name: string; arguments?: string } }[]
+    }
   | { role: 'error'; content: string; createdAt: number }
   | { role: 'reasoning'; content: string; createdAt: number }
   | {

@@ -7,7 +7,15 @@ export async function requestChatCompletion(
   systemPrompt: string,
 ): Promise<ChatCompletionResponse> {
   type ApiMessage =
-    | { role: 'user' | 'assistant' | 'system'; content: string }
+    | {
+        role: 'user' | 'system'
+        content: string
+      }
+    | {
+        role: 'assistant'
+        content: string
+        tool_calls?: { id: string; function: { name: string; arguments?: string } }[]
+      }
     | { role: 'tool'; content: string; tool_call_id: string }
 
   const activeTools = tools
@@ -34,7 +42,14 @@ export async function requestChatCompletion(
           tool_call_id: m.toolCallId,
         }
       }
-      return { role: m.role as 'user' | 'assistant' | 'system', content: m.content }
+      if (m.role === 'assistant') {
+        return {
+          role: 'assistant',
+          content: m.content,
+          ...(m.toolCalls ? { tool_calls: m.toolCalls } : {}),
+        }
+      }
+      return { role: m.role as 'user' | 'system', content: m.content }
     })
 
   if (systemPrompt) apiMessages.unshift({ role: 'system', content: systemPrompt })
