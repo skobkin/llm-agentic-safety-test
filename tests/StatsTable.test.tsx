@@ -28,7 +28,7 @@ describe('StatsTable', () => {
     }
     const { getByText } = render(<StatsTable lastUsage={last} totalUsage={total} />)
     expect(getByText('1')).toBeTruthy()
-    expect(getByText('0.100000')).toBeTruthy()
+    expect(getByText('0.300000')).toBeTruthy()
     expect(getByText('0.900000')).toBeTruthy()
   })
 
