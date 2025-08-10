@@ -19,9 +19,7 @@ export async function requestChatCompletion(
         description: t.description,
         parameters: {
           type: 'object',
-          properties: Object.fromEntries(
-            t.args.map((a) => [a.name, { type: a.type }]),
-          ),
+          properties: Object.fromEntries(t.args.map((a) => [a.name, { type: a.type }])),
         },
       },
     }))

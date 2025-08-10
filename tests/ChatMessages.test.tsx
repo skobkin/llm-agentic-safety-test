@@ -1,10 +1,8 @@
 import { render, fireEvent } from '@testing-library/preact'
 import { describe, it, expect, vi } from 'vitest'
+import { createRef } from 'preact'
 import ChatMessages from '../src/components/ChatMessages'
 import type { ChatMessage } from '../src/types'
-
-// simple ref object for bottomRef
-const createRef = () => ({ current: null }) as any
 
 describe('ChatMessages', () => {
   it('renders various message types and handles removal', async () => {
@@ -22,12 +20,9 @@ describe('ChatMessages', () => {
       },
     ]
     const removeMessage = vi.fn().mockResolvedValue(undefined)
+    const bottomRef = createRef<HTMLDivElement>()
     const { container, getByText } = render(
-      <ChatMessages
-        messages={messages}
-        removeMessage={removeMessage}
-        bottomRef={createRef()}
-      />,
+      <ChatMessages messages={messages} removeMessage={removeMessage} bottomRef={bottomRef} />,
     )
 
     // icons and content

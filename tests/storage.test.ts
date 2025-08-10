@@ -14,10 +14,10 @@ import {
 import type { Settings, ChatMessage, ToolDefinition } from '../src/types'
 
 const { store, setItem, getItem, removeItem } = vi.hoisted(() => {
-  const store = new Map<string, any>()
+  const store = new Map<string, unknown>()
   return {
     store,
-    setItem: vi.fn(async (k: string, v: any) => {
+    setItem: vi.fn(async (k: string, v: unknown) => {
       store.set(k, v)
     }),
     getItem: vi.fn(async (k: string) => store.get(k)),

@@ -56,9 +56,7 @@ export default function ToolsPanel({
             <input
               type="checkbox"
               checked={!t.disabled}
-              onChange={() =>
-                useAppStore.getState().updateTool({ ...t, disabled: !t.disabled })
-              }
+              onChange={() => useAppStore.getState().updateTool({ ...t, disabled: !t.disabled })}
             />{' '}
             {t.name}{' '}
             <a

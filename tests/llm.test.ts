@@ -8,7 +8,7 @@ describe('requestChatCompletion', () => {
 
   beforeEach(() => {
     fetchMock.mockReset()
-    ;(globalThis as any).fetch = fetchMock
+    vi.stubGlobal('fetch', fetchMock)
   })
 
   it('sends messages and tools', async () => {
@@ -73,8 +73,6 @@ describe('requestChatCompletion', () => {
       statusText: 'Bad',
       json: async () => ({ error: { message: 'bad request' } }),
     })
-    await expect(requestChatCompletion(settings, [], [], '')).rejects.toThrow(
-      'bad request',
-    )
+    await expect(requestChatCompletion(settings, [], [], '')).rejects.toThrow('bad request')
   })
 })

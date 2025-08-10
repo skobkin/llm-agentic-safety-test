@@ -24,16 +24,10 @@ export default function StatsTable({ lastUsage, totalUsage }: Props) {
           <tr>
             <th>Prompt</th>
             <td>{lastUsage?.prompt_tokens ?? '-'}</td>
-            <td>
-              {lastUsage?.prompt_cost !== undefined
-                ? lastUsage.prompt_cost.toFixed(4)
-                : '-'}
-            </td>
+            <td>{lastUsage?.prompt_cost !== undefined ? lastUsage.prompt_cost.toFixed(4) : '-'}</td>
             <td>{totalUsage?.prompt_tokens ?? '-'}</td>
             <td>
-              {totalUsage?.prompt_cost !== undefined
-                ? totalUsage.prompt_cost.toFixed(4)
-                : '-'}
+              {totalUsage?.prompt_cost !== undefined ? totalUsage.prompt_cost.toFixed(4) : '-'}
             </td>
           </tr>
           <tr>
@@ -54,17 +48,9 @@ export default function StatsTable({ lastUsage, totalUsage }: Props) {
           <tr>
             <th>Total</th>
             <td>{lastUsage?.total_tokens ?? '-'}</td>
-            <td>
-              {lastUsage?.total_cost !== undefined
-                ? lastUsage.total_cost.toFixed(4)
-                : '-'}
-            </td>
+            <td>{lastUsage?.total_cost !== undefined ? lastUsage.total_cost.toFixed(4) : '-'}</td>
             <td>{totalUsage?.total_tokens ?? '-'}</td>
-            <td>
-              {totalUsage?.total_cost !== undefined
-                ? totalUsage.total_cost.toFixed(4)
-                : '-'}
-            </td>
+            <td>{totalUsage?.total_cost !== undefined ? totalUsage.total_cost.toFixed(4) : '-'}</td>
           </tr>
         </tbody>
       </table>

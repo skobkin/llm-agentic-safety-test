@@ -158,11 +158,7 @@ export default function ChatScreen() {
     <>
       <main class="container" style="display: flex; gap: 1rem; height: 100%;">
         <div style="flex: 0 0 70%; display: flex; flex-direction: column;">
-          <ChatMessages
-            messages={messages}
-            removeMessage={removeMessage}
-            bottomRef={bottomRef}
-          />
+          <ChatMessages messages={messages} removeMessage={removeMessage} bottomRef={bottomRef} />
           {loading && <progress style="width: 100%;"></progress>}
           <div>
             <input
