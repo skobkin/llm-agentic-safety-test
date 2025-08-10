@@ -98,15 +98,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   addUsage(u) {
     const prev = get().totalUsage ?? {}
+    const totalCost = u.total_cost ?? u.cost ?? 0
     set({
-      lastUsage: u,
+      lastUsage: {
+        ...u,
+        ...(u.cost !== undefined && u.total_cost === undefined ? { total_cost: u.cost } : {}),
+      },
       totalUsage: {
         prompt_tokens: (prev.prompt_tokens ?? 0) + (u.prompt_tokens ?? 0),
         completion_tokens: (prev.completion_tokens ?? 0) + (u.completion_tokens ?? 0),
         total_tokens: (prev.total_tokens ?? 0) + (u.total_tokens ?? 0),
         prompt_cost: (prev.prompt_cost ?? 0) + (u.prompt_cost ?? 0),
         completion_cost: (prev.completion_cost ?? 0) + (u.completion_cost ?? 0),
-        total_cost: (prev.total_cost ?? 0) + (u.total_cost ?? 0),
+        total_cost: (prev.total_cost ?? 0) + totalCost,
       },
     })
   },

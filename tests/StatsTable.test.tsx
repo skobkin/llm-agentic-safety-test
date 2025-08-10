@@ -1,7 +1,12 @@
 import { render } from '@testing-library/preact'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import StatsTable from '../src/components/StatsTable'
 import type { Usage } from '../src/types'
+import { useAppStore } from '../src/store'
+
+beforeEach(async () => {
+  await useAppStore.getState().resetChat()
+})
 
 describe('StatsTable', () => {
   it('renders usage values', () => {
@@ -23,8 +28,19 @@ describe('StatsTable', () => {
     }
     const { getByText } = render(<StatsTable lastUsage={last} totalUsage={total} />)
     expect(getByText('1')).toBeTruthy()
-    expect(getByText('0.1000')).toBeTruthy()
-    expect(getByText('0.9000')).toBeTruthy()
+    expect(getByText('0.100000')).toBeTruthy()
+    expect(getByText('0.900000')).toBeTruthy()
+  })
+
+  it('sums tiny costs accurately', () => {
+    const { addUsage } = useAppStore.getState()
+    addUsage({ cost: 0.000001 })
+    addUsage({ cost: 0.000001 })
+    addUsage({ cost: 0.000001 })
+    const { lastUsage, totalUsage } = useAppStore.getState()
+    const { getByText } = render(<StatsTable lastUsage={lastUsage} totalUsage={totalUsage} />)
+    expect(getByText('0.000001')).toBeTruthy()
+    expect(getByText('0.000003')).toBeTruthy()
   })
 
   it('renders nothing without usage', () => {

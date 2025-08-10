@@ -43,6 +43,7 @@ export type Usage = {
   prompt_cost?: number
   completion_cost?: number
   total_cost?: number
+  cost?: number
 }
 
 export type ChatCompletionResponse = {
