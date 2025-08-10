@@ -1,11 +1,17 @@
 import { create } from 'zustand'
-import localforage from 'localforage'
 import type { Settings, ChatMessage, ToolDefinition, Usage } from './types'
-
-const SETTINGS_KEY = 'settings'
-const TOOLS_KEY = 'tools'
-const HISTORY_KEY = 'history_default'
-const SYSTEM_PROMPT_KEY = 'system_prompt'
+import {
+  saveSettings,
+  loadSettings,
+  saveMessages,
+  loadMessages,
+  saveTools,
+  loadTools,
+  removeMessages,
+  removeTools,
+  saveSystemPrompt,
+  loadSystemPrompt,
+} from './utils/storage'
 
 interface AppState {
   settings?: Settings
@@ -36,58 +42,58 @@ export const useAppStore = create<AppState>((set, get) => ({
   totalUsage: undefined,
   systemPrompt: '',
   async setSettings(s) {
-    await localforage.setItem(SETTINGS_KEY, s)
+    await saveSettings(s)
     set({ settings: s })
   },
   async addMessage(m) {
     const msgs = [...get().messages, m]
-    await localforage.setItem(HISTORY_KEY, msgs)
+    await saveMessages(msgs)
     set({ messages: msgs })
   },
   async removeMessage(createdAt) {
     const msgs = get().messages.filter((m) => m.createdAt !== createdAt)
-    await localforage.setItem(HISTORY_KEY, msgs)
+    await saveMessages(msgs)
     set({ messages: msgs })
   },
   async addTool(t) {
     const tools = [...get().tools, t]
-    await localforage.setItem(TOOLS_KEY, tools)
+    await saveTools(tools)
     set({ tools })
   },
   async updateTool(t) {
     const tools = get().tools.map((tool) => (tool.id === t.id ? t : tool))
-    await localforage.setItem(TOOLS_KEY, tools)
+    await saveTools(tools)
     set({ tools })
   },
   async setTools(ts) {
-    await localforage.setItem(TOOLS_KEY, ts)
+    await saveTools(ts)
     set({ tools: ts })
   },
   async removeTool(id) {
     const tools = get().tools.filter((t) => t.id !== id)
-    await localforage.setItem(TOOLS_KEY, tools)
+    await saveTools(tools)
     set({ tools })
   },
   async resetChat() {
-    await localforage.removeItem(HISTORY_KEY)
+    await removeMessages()
     set({ messages: [], lastUsage: undefined, totalUsage: undefined })
   },
   async clearTools() {
-    await localforage.removeItem(TOOLS_KEY)
+    await removeTools()
     set({ tools: [] })
   },
   async load() {
     const [settings, messages, tools, systemPrompt] = await Promise.all([
-      localforage.getItem<Settings>(SETTINGS_KEY),
-      localforage.getItem<ChatMessage[]>(HISTORY_KEY),
-      localforage.getItem<ToolDefinition[]>(TOOLS_KEY),
-      localforage.getItem<string>(SYSTEM_PROMPT_KEY),
+      loadSettings(),
+      loadMessages(),
+      loadTools(),
+      loadSystemPrompt(),
     ])
     set({
-      settings: settings ?? undefined,
-      messages: messages ?? [],
-      tools: tools ?? [],
-      systemPrompt: systemPrompt ?? '',
+      settings,
+      messages,
+      tools,
+      systemPrompt,
     })
   },
   addUsage(u) {
@@ -105,7 +111,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     })
   },
   async setSystemPrompt(p) {
-    await localforage.setItem(SYSTEM_PROMPT_KEY, p)
+    await saveSystemPrompt(p)
     set({ systemPrompt: p })
   },
 }))

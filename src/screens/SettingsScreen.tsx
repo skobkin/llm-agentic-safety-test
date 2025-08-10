@@ -18,11 +18,6 @@ export default function SettingsScreen() {
   const [, navigate] = useLocation()
   const setSettings = useAppStore((s) => s.setSettings)
   const settings = useAppStore((s) => s.settings)
-  const load = useAppStore((s) => s.load)
-
-  useEffect(() => {
-    load()
-  }, [load])
 
   useEffect(() => {
     if (settings) {
