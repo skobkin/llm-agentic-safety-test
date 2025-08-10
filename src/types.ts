@@ -39,3 +39,15 @@ export type Usage = {
   completion_cost?: number
   total_cost?: number
 }
+
+export type ChatCompletionResponse = {
+  error?: { message?: string }
+  choices?: {
+    message?: {
+      content?: string
+      reasoning?: string
+      tool_calls?: { id: string; function: { name: string; arguments?: string } }[]
+    }
+  }[]
+  usage?: Usage
+}

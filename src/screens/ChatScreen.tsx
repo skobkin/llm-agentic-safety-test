@@ -1,21 +1,12 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { useLocation } from 'wouter-preact'
 import { useAppStore } from '../store'
-import type { ArgType, ChatMessage, ToolDefinition, Usage } from '../types'
+import type { ArgType, ChatMessage, ToolDefinition, ChatCompletionResponse } from '../types'
 import Modal from '../components/Modal'
-import MarkdownMessage from '../components/MarkdownMessage'
-
-type ChatCompletionResponse = {
-  error?: { message?: string }
-  choices?: {
-    message?: {
-      content?: string
-      reasoning?: string
-      tool_calls?: { id: string; function: { name: string; arguments?: string } }[]
-    }
-  }[]
-  usage?: Usage
-}
+import ChatMessages from '../components/ChatMessages'
+import ToolsPanel from '../components/ToolsPanel'
+import StatsTable from '../components/StatsTable'
+import { requestChatCompletion } from '../services/llm'
 
 export default function ChatScreen() {
   const {
@@ -27,7 +18,6 @@ export default function ChatScreen() {
     resetChat,
     addTool,
     clearTools,
-    load,
     lastUsage,
     totalUsage,
     addUsage,
@@ -57,10 +47,6 @@ export default function ChatScreen() {
   }, [dialog])
 
   useEffect(() => {
-    load()
-  }, [load])
-
-  useEffect(() => {
     if (!settings) navigate('/settings')
   }, [settings, navigate])
 
@@ -75,72 +61,14 @@ export default function ChatScreen() {
     setInput('')
     setLoading(true)
 
-    type ApiMessage =
-      | { role: 'user' | 'assistant' | 'system'; content: string }
-      | { role: 'tool'; content: string; tool_call_id: string }
-
     const runAssistant = async () => {
       for (;;) {
         const { settings: s, messages: msgs, tools: ts, systemPrompt: sp } = useAppStore.getState()
         if (!s) return
 
-        const activeTools = ts
-          .filter((t) => !t.disabled)
-          .map((t) => ({
-            type: 'function',
-            function: {
-              name: t.name,
-              description: t.description,
-              parameters: {
-                type: 'object',
-                properties: Object.fromEntries(t.args.map((a) => [a.name, { type: a.type }])),
-              },
-            },
-          }))
-
-        const apiMessages: ApiMessage[] = msgs
-          .filter((m) => m.role !== 'error' && m.role !== 'reasoning')
-          .map((m) => {
-            if (m.role === 'tool') {
-              return {
-                role: 'tool',
-                content: String(m.result ?? ''),
-                tool_call_id: m.toolCallId,
-              }
-            }
-            return { role: m.role as 'user' | 'assistant' | 'system', content: m.content }
-          })
-
-        if (sp) apiMessages.unshift({ role: 'system', content: sp })
-
-        const payload: Record<string, unknown> = {
-          model: s.model,
-          messages: apiMessages,
-          tool_choice: activeTools.length > 0 ? 'auto' : 'none',
-          usage: { include: true },
-        }
-        if (activeTools.length > 0) payload.tools = activeTools
-
         let data: ChatCompletionResponse
         try {
-          const res = await fetch(`${s.apiBaseUrl}/chat/completions`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(s.apiToken ? { Authorization: `Bearer ${s.apiToken}` } : {}),
-            },
-            body: JSON.stringify(payload),
-          })
-          data = (await res.json()) as ChatCompletionResponse
-          if (!res.ok || data.error) {
-            const message = data.error?.message ?? `${res.status} ${res.statusText}`
-            await addMessage({
-              role: 'error',
-              content: `❌ API: ${message}`,
-              createdAt: Date.now(),
-            })
-            return
-          }
+          data = await requestChatCompletion(s, msgs, ts, sp)
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
           await addMessage({
@@ -230,51 +158,7 @@ export default function ChatScreen() {
     <>
       <main class="container" style="display: flex; gap: 1rem; height: 100%;">
         <div style="flex: 0 0 70%; display: flex; flex-direction: column;">
-          <div style="flex: 1; overflow-y: auto;">
-            {messages.map((m) => (
-              <div
-                key={m.createdAt}
-                style="margin-bottom: 0.25rem; display: flex; gap: 0.25rem; align-items: flex-start;"
-              >
-                {m.role === 'user' && (
-                  <>
-                    <span>👨</span>
-                    <MarkdownMessage source={m.content} />
-                  </>
-                )}
-                {m.role === 'assistant' && (
-                  <>
-                    <span>🤖</span>
-                    <MarkdownMessage source={m.content} />
-                  </>
-                )}
-                {m.role === 'error' && <MarkdownMessage source={m.content} />}
-                {m.role === 'reasoning' && (
-                  <details>
-                    <summary>🤖💭</summary>
-                    <pre style="white-space: pre-wrap;">{m.content}</pre>
-                  </details>
-                )}
-                {m.role === 'tool' && (
-                  <>
-                    🤖🔧 <mark>{m.toolName}()</mark> {JSON.stringify(m.args)}{' '}
-                    {m.result !== undefined && `=> ${JSON.stringify(m.result)}`}
-                  </>
-                )}
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    removeMessage(m.createdAt)
-                  }}
-                  style="margin-left: 0.5rem;"
-                >
-                  x
-                </a>
-              </div>
-            ))}
-            <div ref={bottomRef} />
-          </div>
+          <ChatMessages messages={messages} removeMessage={removeMessage} bottomRef={bottomRef} />
           {loading && <progress style="width: 100%;"></progress>}
           <div>
             <input
@@ -290,127 +174,15 @@ export default function ChatScreen() {
           </div>
         </div>
         <aside style="flex: 1; min-width: 300px; position: sticky; top: 0; align-self: flex-start;">
-          <details>
-            <summary>System Prompt</summary>
-            <textarea
-              style="width: 100%;"
-              value={systemPrompt}
-              onInput={(e) => setSystemPrompt((e.target as HTMLTextAreaElement).value)}
-            />
-          </details>
-          <h3>Tools</h3>
-          <div role="group" style="margin-bottom: 0.5rem;">
-            <button onClick={onAddTool}>Add Tool</button>
-            <button
-              onClick={() =>
-                setDialog({
-                  mode: 'export',
-                  text: JSON.stringify({ systemPrompt, tools }, null, 2),
-                })
-              }
-            >
-              Export
-            </button>
-            <button
-              onClick={() => {
-                if (!confirm('Import will overwrite existing tools. Continue?')) return
-                setDialog({ mode: 'import', text: '' })
-              }}
-            >
-              Import
-            </button>
-          </div>
-          <div style={tools.length > 5 ? 'max-height: 10rem; overflow-y: auto;' : undefined}>
-            {tools.map((t) => (
-              <div>
-                <input
-                  type="checkbox"
-                  checked={!t.disabled}
-                  onChange={() =>
-                    useAppStore.getState().updateTool({ ...t, disabled: !t.disabled })
-                  }
-                />{' '}
-                {t.name}{' '}
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    onEditTool(t)
-                  }}
-                  aria-label={`Edit ${t.name}`}
-                  style="margin-left: 0.25rem;"
-                >
-                  ✎
-                </a>
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    useAppStore.getState().removeTool(t.id)
-                  }}
-                  aria-label={`Delete ${t.name}`}
-                  style="margin-left: 0.25rem;"
-                >
-                  ✖
-                </a>
-              </div>
-            ))}
-          </div>
-          <h3>Stats</h3>
-          {(lastUsage || totalUsage) && (
-            <table>
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Last</th>
-                  <th>$</th>
-                  <th>Total</th>
-                  <th>$</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <th>Prompt</th>
-                  <td>{lastUsage?.prompt_tokens ?? '-'}</td>
-                  <td>
-                    {lastUsage?.prompt_cost !== undefined ? lastUsage.prompt_cost.toFixed(4) : '-'}
-                  </td>
-                  <td>{totalUsage?.prompt_tokens ?? '-'}</td>
-                  <td>
-                    {totalUsage?.prompt_cost !== undefined
-                      ? totalUsage.prompt_cost.toFixed(4)
-                      : '-'}
-                  </td>
-                </tr>
-                <tr>
-                  <th>Completion</th>
-                  <td>{lastUsage?.completion_tokens ?? '-'}</td>
-                  <td>
-                    {lastUsage?.completion_cost !== undefined
-                      ? lastUsage.completion_cost.toFixed(4)
-                      : '-'}
-                  </td>
-                  <td>{totalUsage?.completion_tokens ?? '-'}</td>
-                  <td>
-                    {totalUsage?.completion_cost !== undefined
-                      ? totalUsage.completion_cost.toFixed(4)
-                      : '-'}
-                  </td>
-                </tr>
-                <tr>
-                  <th>Total</th>
-                  <td>{lastUsage?.total_tokens ?? '-'}</td>
-                  <td>
-                    {lastUsage?.total_cost !== undefined ? lastUsage.total_cost.toFixed(4) : '-'}
-                  </td>
-                  <td>{totalUsage?.total_tokens ?? '-'}</td>
-                  <td>
-                    {totalUsage?.total_cost !== undefined ? totalUsage.total_cost.toFixed(4) : '-'}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          )}
+          <ToolsPanel
+            tools={tools}
+            systemPrompt={systemPrompt}
+            setSystemPrompt={setSystemPrompt}
+            onAddTool={onAddTool}
+            onEditTool={onEditTool}
+            setDialog={setDialog}
+          />
+          <StatsTable lastUsage={lastUsage} totalUsage={totalUsage} />
           <hr />
           <div role="group">
             <button onClick={() => resetChat()}>Reset Chat</button>
