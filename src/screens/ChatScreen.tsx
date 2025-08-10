@@ -11,7 +11,7 @@ type ChatCompletionResponse = {
     message?: {
       content?: string
       reasoning?: string
-      tool_calls?: { function: { name: string; arguments?: string } }[]
+      tool_calls?: { id: string; function: { name: string; arguments?: string } }[]
     }
   }[]
   usage?: Usage
@@ -89,12 +89,23 @@ export default function ChatScreen() {
         },
       }))
 
-    type ApiMessage = { role: 'user' | 'assistant' | 'system'; content: string }
+    type ApiMessage =
+      | { role: 'user' | 'assistant' | 'system'; content: string }
+      | { role: 'tool'; content: string; tool_call_id: string }
 
     const apiMessages: ApiMessage[] = messages
-      .filter((m) => m.role !== 'tool' && m.role !== 'error' && m.role !== 'reasoning')
+      .filter((m) => m.role !== 'error' && m.role !== 'reasoning')
       .concat(userMessage)
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+      .map((m) => {
+        if (m.role === 'tool') {
+          return {
+            role: 'tool',
+            content: String(m.result ?? ''),
+            tool_call_id: m.toolCallId,
+          }
+        }
+        return { role: m.role as 'user' | 'assistant' | 'system', content: m.content }
+      })
 
     if (systemPrompt) apiMessages.unshift({ role: 'system', content: systemPrompt })
 
@@ -159,6 +170,7 @@ export default function ChatScreen() {
             await addMessage({
               role: 'tool',
               toolName: call.function.name,
+              toolCallId: call.id,
               args,
               result: tool?.returnValue,
               createdAt: Date.now(),

@@ -11,6 +11,7 @@ export type ChatMessage =
   | { role: 'reasoning'; content: string; createdAt: number }
   | {
       role: 'tool'
+      toolCallId: string
       toolName: string
       args: Record<string, unknown>
       result?: unknown
