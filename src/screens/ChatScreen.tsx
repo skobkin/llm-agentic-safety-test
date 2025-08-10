@@ -75,62 +75,74 @@ export default function ChatScreen() {
     setInput('')
     setLoading(true)
 
-    const activeTools = tools
-      .filter((t) => !t.disabled)
-      .map((t) => ({
-        type: 'function',
-        function: {
-          name: t.name,
-          description: t.description,
-          parameters: {
-            type: 'object',
-            properties: Object.fromEntries(t.args.map((a) => [a.name, { type: a.type }])),
-          },
-        },
-      }))
-
     type ApiMessage =
       | { role: 'user' | 'assistant' | 'system'; content: string }
       | { role: 'tool'; content: string; tool_call_id: string }
 
-    const apiMessages: ApiMessage[] = messages
-      .filter((m) => m.role !== 'error' && m.role !== 'reasoning')
-      .concat(userMessage)
-      .map((m) => {
-        if (m.role === 'tool') {
-          return {
-            role: 'tool',
-            content: String(m.result ?? ''),
-            tool_call_id: m.toolCallId,
-          }
+    const runAssistant = async () => {
+      for (;;) {
+        const { settings: s, messages: msgs, tools: ts, systemPrompt: sp } = useAppStore.getState()
+        if (!s) return
+
+        const activeTools = ts
+          .filter((t) => !t.disabled)
+          .map((t) => ({
+            type: 'function',
+            function: {
+              name: t.name,
+              description: t.description,
+              parameters: {
+                type: 'object',
+                properties: Object.fromEntries(t.args.map((a) => [a.name, { type: a.type }])),
+              },
+            },
+          }))
+
+        const apiMessages: ApiMessage[] = msgs
+          .filter((m) => m.role !== 'error' && m.role !== 'reasoning')
+          .map((m) => {
+            if (m.role === 'tool') {
+              return {
+                role: 'tool',
+                content: String(m.result ?? ''),
+                tool_call_id: m.toolCallId,
+              }
+            }
+            return { role: m.role as 'user' | 'assistant' | 'system', content: m.content }
+          })
+
+        if (sp) apiMessages.unshift({ role: 'system', content: sp })
+
+        const payload: Record<string, unknown> = {
+          model: s.model,
+          messages: apiMessages,
+          tool_choice: activeTools.length > 0 ? 'auto' : 'none',
+          usage: { include: true },
         }
-        return { role: m.role as 'user' | 'assistant' | 'system', content: m.content }
-      })
+        if (activeTools.length > 0) payload.tools = activeTools
 
-    if (systemPrompt) apiMessages.unshift({ role: 'system', content: systemPrompt })
-
-    const payload: Record<string, unknown> = {
-      model: settings.model,
-      messages: apiMessages,
-      tool_choice: activeTools.length > 0 ? 'auto' : 'none',
-      usage: { include: true },
-    }
-    if (activeTools.length > 0) payload.tools = activeTools
-
-    try {
-      let data: ChatCompletionResponse
-      try {
-        const res = await fetch(`${settings.apiBaseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(settings.apiToken ? { Authorization: `Bearer ${settings.apiToken}` } : {}),
-          },
-          body: JSON.stringify(payload),
-        })
-        data = (await res.json()) as ChatCompletionResponse
-        if (!res.ok || data.error) {
-          const message = data.error?.message ?? `${res.status} ${res.statusText}`
+        let data: ChatCompletionResponse
+        try {
+          const res = await fetch(`${s.apiBaseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(s.apiToken ? { Authorization: `Bearer ${s.apiToken}` } : {}),
+            },
+            body: JSON.stringify(payload),
+          })
+          data = (await res.json()) as ChatCompletionResponse
+          if (!res.ok || data.error) {
+            const message = data.error?.message ?? `${res.status} ${res.statusText}`
+            await addMessage({
+              role: 'error',
+              content: `❌ API: ${message}`,
+              createdAt: Date.now(),
+            })
+            return
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
           await addMessage({
             role: 'error',
             content: `❌ API: ${message}`,
@@ -138,25 +150,23 @@ export default function ChatScreen() {
           })
           return
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        await addMessage({
-          role: 'error',
-          content: `❌ API: ${message}`,
-          createdAt: Date.now(),
-        })
-        return
-      }
 
-      try {
-        const reasoning = data.choices?.[0]?.message?.reasoning
-        if (reasoning) {
-          await addMessage({ role: 'reasoning', content: reasoning, createdAt: Date.now() })
-        }
-        const content = data.choices?.[0]?.message?.content ?? '[no reply]'
-        await addMessage({ role: 'assistant', content, createdAt: Date.now() })
-        const toolCalls = data.choices?.[0]?.message?.tool_calls
-        if (toolCalls) {
+        try {
+          const reasoning = data.choices?.[0]?.message?.reasoning
+          if (reasoning) {
+            await addMessage({ role: 'reasoning', content: reasoning, createdAt: Date.now() })
+          }
+          const content = data.choices?.[0]?.message?.content?.trim() ?? ''
+          const toolCalls = data.choices?.[0]?.message?.tool_calls
+          if (content || !toolCalls) {
+            await addMessage({ role: 'assistant', content, createdAt: Date.now() })
+          }
+          if (data.usage) {
+            addUsage(data.usage)
+          }
+          if (!toolCalls) {
+            break
+          }
           for (const call of toolCalls) {
             let args: Record<string, unknown> = {}
             try {
@@ -166,7 +176,7 @@ export default function ChatScreen() {
             } catch {
               // ignore parse errors
             }
-            const tool = tools.find((t) => t.name === call.function.name)
+            const tool = ts.find((t) => t.name === call.function.name)
             await addMessage({
               role: 'tool',
               toolName: call.function.name,
@@ -176,25 +186,20 @@ export default function ChatScreen() {
               createdAt: Date.now(),
             })
           }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          await addMessage({
+            role: 'error',
+            content: `❌ App: ${message}`,
+            createdAt: Date.now(),
+          })
+          break
         }
-        if (data.usage) {
-          addUsage(data.usage)
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        await addMessage({
-          role: 'error',
-          content: `❌ App: ${message}`,
-          createdAt: Date.now(),
-        })
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      await addMessage({
-        role: 'error',
-        content: `❌ App: ${message}`,
-        createdAt: Date.now(),
-      })
+    }
+
+    try {
+      await runAssistant()
     } finally {
       setLoading(false)
     }
