@@ -86,8 +86,8 @@ export default function ChatScreen() {
           }
           const content = data.choices?.[0]?.message?.content?.trim() ?? ''
           const toolCalls = data.choices?.[0]?.message?.tool_calls
-          if (content || !toolCalls) {
-            await addMessage({ role: 'assistant', content, createdAt: Date.now() })
+          if (content || toolCalls) {
+            await addMessage({ role: 'assistant', content, toolCalls, createdAt: Date.now() })
           }
           if (data.usage) {
             addUsage(data.usage)

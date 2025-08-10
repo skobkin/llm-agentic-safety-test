@@ -66,6 +66,33 @@ describe('requestChatCompletion', () => {
     expect(body.tools).toBeUndefined()
   })
 
+  it('includes assistant tool calls in messages', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) })
+    const messages: ChatMessage[] = [
+      {
+        role: 'assistant',
+        content: '',
+        createdAt: 1,
+        toolCalls: [{ id: 'tc', function: { name: 'foo', arguments: '{}' } }],
+      },
+      {
+        role: 'tool',
+        toolCallId: 'tc',
+        toolName: 'foo',
+        args: {},
+        createdAt: 2,
+        result: '',
+      },
+    ]
+    await requestChatCompletion(settings, messages, [], '')
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+    expect(body.messages[0]).toEqual({
+      role: 'assistant',
+      content: '',
+      tool_calls: [{ id: 'tc', function: { name: 'foo', arguments: '{}' } }],
+    })
+  })
+
   it('throws on API error', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
