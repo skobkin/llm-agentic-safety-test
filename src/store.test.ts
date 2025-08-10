@@ -97,6 +97,17 @@ describe('store', () => {
     expect(total?.total_cost).toBeCloseTo(0.8)
   })
 
+  it('maps cost to total_cost', () => {
+    useAppStore.getState().addUsage({
+      prompt_tokens: 1,
+      completion_tokens: 1,
+      total_tokens: 2,
+      cost: 0.123456,
+    })
+    expect(useAppStore.getState().lastUsage?.total_cost).toBeCloseTo(0.123456)
+    expect(useAppStore.getState().totalUsage?.total_cost).toBeCloseTo(0.123456)
+  })
+
   it('removes messages', async () => {
     await useAppStore.getState().addMessage({
       role: 'user',
