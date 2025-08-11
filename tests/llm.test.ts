@@ -93,6 +93,33 @@ describe('requestChatCompletion', () => {
     })
   })
 
+  it('streams tokens and returns usage', async () => {
+    const encoder = new TextEncoder()
+    fetchMock.mockResolvedValue({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"hel"}}]}\n\n'))
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"lo"}}]}\n\n'))
+          controller.enqueue(
+            encoder.encode(
+              'data: {"choices":[{"message":{"tool_calls":[{"id":"t","function":{"name":"foo"}}]}}],"usage":{"total_tokens":3}}\n\n',
+            ),
+          )
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+          controller.close()
+        },
+      }),
+    })
+    const chunks: string[] = []
+    const res = await requestChatCompletion(settings, [], [], '', (c) => chunks.push(c))
+    expect(chunks).toEqual(['hel', 'lo'])
+    expect(res.choices?.[0]?.message?.content).toBe('hello')
+    expect(res.usage?.total_tokens).toBe(3)
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+    expect(body.stream).toBe(true)
+  })
+
   it('throws on API error', async () => {
     fetchMock.mockResolvedValue({
       ok: false,

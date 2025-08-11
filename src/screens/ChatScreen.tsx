@@ -38,6 +38,7 @@ export default function ChatScreen() {
   } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [loading, setLoading] = useState(false)
+  const [partialAssistant, setPartialAssistant] = useState('')
 
   useEffect(() => {
     if (dialog) {
@@ -52,7 +53,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, partialAssistant])
 
   const sendMessage = async () => {
     if (!settings || loading) return
@@ -66,11 +67,15 @@ export default function ChatScreen() {
         const { settings: s, messages: msgs, tools: ts, systemPrompt: sp } = useAppStore.getState()
         if (!s) return
 
+        setPartialAssistant('')
         let data: ChatCompletionResponse
         try {
-          data = await requestChatCompletion(s, msgs, ts, sp)
+          data = await requestChatCompletion(s, msgs, ts, sp, (chunk) =>
+            setPartialAssistant((p) => p + chunk),
+          )
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
+          setPartialAssistant('')
           await addMessage({
             role: 'error',
             content: `❌ API: ${message}`,
@@ -89,6 +94,7 @@ export default function ChatScreen() {
           if (content || toolCalls) {
             await addMessage({ role: 'assistant', content, toolCalls, createdAt: Date.now() })
           }
+          setPartialAssistant('')
           if (data.usage) {
             addUsage(data.usage)
           }
@@ -116,6 +122,7 @@ export default function ChatScreen() {
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
+          setPartialAssistant('')
           await addMessage({
             role: 'error',
             content: `❌ App: ${message}`,
@@ -158,7 +165,12 @@ export default function ChatScreen() {
     <>
       <main class="container" style="display: flex; gap: 1rem; height: 100%;">
         <div style="flex: 0 0 70%; display: flex; flex-direction: column;">
-          <ChatMessages messages={messages} removeMessage={removeMessage} bottomRef={bottomRef} />
+          <ChatMessages
+            messages={messages}
+            pendingAssistant={partialAssistant}
+            removeMessage={removeMessage}
+            bottomRef={bottomRef}
+          />
           {loading && <progress style="width: 100%;"></progress>}
           <div>
             <input

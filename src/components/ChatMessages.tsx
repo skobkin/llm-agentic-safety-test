@@ -4,11 +4,17 @@ import type { ChatMessage } from '../types'
 
 interface Props {
   messages: ChatMessage[]
+  pendingAssistant?: string
   removeMessage: (createdAt: number) => Promise<void>
   bottomRef: RefObject<HTMLDivElement>
 }
 
-export default function ChatMessages({ messages, removeMessage, bottomRef }: Props) {
+export default function ChatMessages({
+  messages,
+  pendingAssistant,
+  removeMessage,
+  bottomRef,
+}: Props) {
   return (
     <div style="flex: 1; overflow-y: auto;">
       {messages.map((m) => (
@@ -53,6 +59,12 @@ export default function ChatMessages({ messages, removeMessage, bottomRef }: Pro
           </a>
         </div>
       ))}
+      {pendingAssistant && (
+        <div style="margin-bottom: 0.25rem; display: flex; gap: 0.25rem; align-items: flex-start;">
+          <span>🤖</span>
+          <MarkdownMessage source={pendingAssistant} />
+        </div>
+      )}
       <div ref={bottomRef} />
     </div>
   )
