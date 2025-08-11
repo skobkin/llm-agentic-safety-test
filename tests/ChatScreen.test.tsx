@@ -1,43 +1,63 @@
 import { render, fireEvent, waitFor } from '@testing-library/preact'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { Settings, ChatMessage, ToolDefinition, Usage } from '../src/types'
 
 vi.mock('../src/store', () => {
-  const state: any = {
+  interface MockStore {
+    settings?: Settings
+    messages: ChatMessage[]
+    tools: ToolDefinition[]
+    lastUsage?: Usage
+    totalUsage?: Usage
+    systemPrompt: string
+    addMessage(m: ChatMessage): Promise<void>
+    removeMessage(createdAt: number): Promise<void>
+    resetChat(): Promise<void>
+    addTool(): Promise<void>
+    clearTools(): Promise<void>
+    addUsage(u: Usage): void
+    setSystemPrompt(p: string): Promise<void>
+  }
+  const state: MockStore = {
     settings: undefined,
     messages: [],
     tools: [],
     lastUsage: undefined,
     totalUsage: undefined,
     systemPrompt: '',
-    async addMessage(m: any) {
+    async addMessage(m) {
       state.messages.push(m)
     },
-    async removeMessage(createdAt: number) {
-      state.messages = state.messages.filter((m: any) => m.createdAt !== createdAt)
+    async removeMessage(createdAt) {
+      state.messages = state.messages.filter((m) => m.createdAt !== createdAt)
     },
     async resetChat() {},
     async addTool() {},
     async clearTools() {
       state.tools = []
     },
-    addUsage(u: any) {
+    addUsage(u) {
       state.lastUsage = u
       state.totalUsage = u
     },
-    async setSystemPrompt(p: string) {
+    async setSystemPrompt(p) {
       state.systemPrompt = p
     },
   }
-  const useAppStore = () => state
-  ;(useAppStore as any).getState = () => state
-  ;(useAppStore as any).setState = (s: any) => Object.assign(state, s)
+  type UseAppStore = (() => MockStore) & {
+    getState: () => MockStore
+    setState: (s: Partial<MockStore>) => void
+  }
+  const useAppStore: UseAppStore = Object.assign(() => state, {
+    getState: () => state,
+    setState: (s: Partial<MockStore>) => Object.assign(state, s),
+  })
   return { useAppStore }
 })
 
 import ChatScreen from '../src/screens/ChatScreen'
 import { useAppStore } from '../src/store'
-
-(Element.prototype as any).scrollIntoView = vi.fn()
+;(Element.prototype as unknown as { scrollIntoView: () => void }).scrollIntoView = vi.fn()
 
 vi.mock('localforage', () => ({
   default: {
@@ -75,9 +95,7 @@ describe('ChatScreen streaming', () => {
       body: new ReadableStream({
         start(c) {
           controller = c
-          c.enqueue(
-            encoder.encode('data: {"choices":[{"delta":{"content":"hel"}}]}\n\n'),
-          )
+          c.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"hel"}}]}\n\n'))
         },
       }),
     })
@@ -92,9 +110,7 @@ describe('ChatScreen streaming', () => {
     })
     expect(queryAllByText('x')).toHaveLength(1)
 
-    controller.enqueue(
-      encoder.encode('data: {"choices":[{"delta":{"content":"lo"}}]}\n\n'),
-    )
+    controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"lo"}}]}\n\n'))
     await waitFor(() => {
       expect(getByText('hello')).toBeTruthy()
     })

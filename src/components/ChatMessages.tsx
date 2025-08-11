@@ -60,9 +60,7 @@ export default function ChatMessages({
         </div>
       ))}
       {pendingAssistant && (
-        <div
-          style="margin-bottom: 0.25rem; display: flex; gap: 0.25rem; align-items: flex-start;"
-        >
+        <div style="margin-bottom: 0.25rem; display: flex; gap: 0.25rem; align-items: flex-start;">
           <span>🤖</span>
           <MarkdownMessage source={pendingAssistant} />
         </div>

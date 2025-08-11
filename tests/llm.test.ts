@@ -99,12 +99,8 @@ describe('requestChatCompletion', () => {
       ok: true,
       body: new ReadableStream({
         start(controller) {
-          controller.enqueue(
-            encoder.encode('data: {"choices":[{"delta":{"content":"hel"}}]}\n\n'),
-          )
-          controller.enqueue(
-            encoder.encode('data: {"choices":[{"delta":{"content":"lo"}}]}\n\n'),
-          )
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"hel"}}]}\n\n'))
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"lo"}}]}\n\n'))
           controller.enqueue(
             encoder.encode(
               'data: {"choices":[{"message":{"tool_calls":[{"id":"t","function":{"name":"foo"}}]}}],"usage":{"total_tokens":3}}\n\n',
