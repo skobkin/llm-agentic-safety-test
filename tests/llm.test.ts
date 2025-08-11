@@ -73,7 +73,7 @@ describe('requestChatCompletion', () => {
         role: 'assistant',
         content: '',
         createdAt: 1,
-        toolCalls: [{ id: 'tc', function: { name: 'foo', arguments: '{}' } }],
+        toolCalls: [{ id: 'tc', type: 'function', function: { name: 'foo', arguments: '{}' } }],
       },
       {
         role: 'tool',
@@ -89,7 +89,7 @@ describe('requestChatCompletion', () => {
     expect(body.messages[0]).toEqual({
       role: 'assistant',
       content: '',
-      tool_calls: [{ id: 'tc', function: { name: 'foo', arguments: '{}' } }],
+      tool_calls: [{ id: 'tc', type: 'function', function: { name: 'foo', arguments: '{}' } }],
     })
   })
 
@@ -115,6 +115,7 @@ describe('requestChatCompletion', () => {
     const res = await requestChatCompletion(settings, [], [], '', (c) => chunks.push(c))
     expect(chunks).toEqual(['hel', 'lo'])
     expect(res.choices?.[0]?.message?.content).toBe('hello')
+    expect(res.choices?.[0]?.message?.tool_calls?.[0]?.type).toBe('function')
     expect(res.usage?.total_tokens).toBe(3)
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
     expect(body.stream).toBe(true)
