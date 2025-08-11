@@ -38,4 +38,36 @@ describe('ChatMessages', () => {
     await fireEvent.click(removeLink)
     expect(removeMessage).toHaveBeenCalledWith(1)
   })
+
+  it('skips empty assistant messages with only tool calls', () => {
+    const messages: ChatMessage[] = [
+      {
+        role: 'assistant',
+        content: '',
+        createdAt: 1,
+        toolCalls: [{ id: 'tc', type: 'function', function: { name: 'foo', arguments: '{}' } }],
+      },
+      { role: 'user', content: 'hi', createdAt: 2 },
+    ]
+    const removeMessage = vi.fn().mockResolvedValue(undefined)
+    const bottomRef = createRef<HTMLDivElement>()
+    const { container } = render(
+      <ChatMessages messages={messages} removeMessage={removeMessage} bottomRef={bottomRef} />,
+    )
+    expect(container.textContent).not.toContain('🤖')
+    expect(container.textContent).toContain('hi')
+  })
+
+  it('renders empty assistant messages without tool calls', () => {
+    const messages: ChatMessage[] = [
+      { role: 'assistant', content: '', createdAt: 1 },
+      { role: 'user', content: 'hi', createdAt: 2 },
+    ]
+    const removeMessage = vi.fn().mockResolvedValue(undefined)
+    const bottomRef = createRef<HTMLDivElement>()
+    const { container } = render(
+      <ChatMessages messages={messages} removeMessage={removeMessage} bottomRef={bottomRef} />,
+    )
+    expect((container.textContent?.match(/🤖/g) ?? []).length).toBe(1)
+  })
 })

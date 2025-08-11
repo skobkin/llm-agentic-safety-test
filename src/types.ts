@@ -10,7 +10,7 @@ export type ChatMessage =
       role: 'assistant'
       content: string
       createdAt: number
-      toolCalls?: { id: string; function: { name: string; arguments?: string } }[]
+      toolCalls?: { id: string; type: 'function'; function: { name: string; arguments?: string } }[]
     }
   | { role: 'error'; content: string; createdAt: number }
   | { role: 'reasoning'; content: string; createdAt: number }
@@ -52,7 +52,11 @@ export type ChatCompletionResponse = {
     message?: {
       content?: string
       reasoning?: string
-      tool_calls?: { id: string; function: { name: string; arguments?: string } }[]
+      tool_calls?: {
+        id: string
+        type: 'function'
+        function: { name: string; arguments?: string }
+      }[]
     }
   }[]
   usage?: Usage

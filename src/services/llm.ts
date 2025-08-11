@@ -15,7 +15,11 @@ export async function requestChatCompletion(
     | {
         role: 'assistant'
         content: string
-        tool_calls?: { id: string; function: { name: string; arguments?: string } }[]
+        tool_calls?: {
+          id: string
+          type: 'function'
+          function: { name: string; arguments?: string }
+        }[]
       }
     | { role: 'tool'; content: string; tool_call_id: string }
 
@@ -90,7 +94,9 @@ export async function requestChatCompletion(
   const decoder = new TextDecoder()
   let buffer = ''
   let content = ''
-  let toolCalls: { id: string; function: { name: string; arguments?: string } }[] | undefined
+  let toolCalls:
+    | { id: string; type: 'function'; function: { name: string; arguments?: string } }[]
+    | undefined
   let usage: ChatCompletionResponse['usage']
 
   for (;;) {
@@ -119,9 +125,12 @@ export async function requestChatCompletion(
           const index = tc.index ?? toolCalls.length
           const existing = toolCalls[index] ?? {
             id: tc.id ?? '',
+            // Ensure the `type` field is always included for each tool call
+            type: 'function',
             function: { name: tc.function?.name ?? '', arguments: '' },
           }
           if (tc.id) existing.id = tc.id
+          if (tc.type) existing.type = tc.type
           if (tc.function?.name) existing.function.name = tc.function.name
           if (tc.function?.arguments)
             existing.function.arguments =
@@ -130,7 +139,20 @@ export async function requestChatCompletion(
         }
       }
       if (json.choices?.[0]?.message?.tool_calls) {
-        toolCalls = json.choices[0].message.tool_calls
+        toolCalls = json.choices[0].message.tool_calls.map(
+          (tc: {
+            id: string
+            type?: string
+            function?: { name?: string; arguments?: string }
+          }) => ({
+            id: tc.id,
+            type: tc.type ?? 'function',
+            function: {
+              name: tc.function?.name,
+              arguments: tc.function?.arguments,
+            },
+          }),
+        )
       }
       if (json.usage) {
         usage = json.usage
